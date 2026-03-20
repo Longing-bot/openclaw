@@ -117,3 +117,12 @@ export class GlobalOptimizer {
 
 // 导出单例
 export const globalOptimizer = GlobalOptimizer.getInstance();
+
+// 渠道优化器
+export { ChannelOptimizer, channelOptimizer } from './channels/channel-optimizer.js';
+
+// 技能优化器
+export { SkillOptimizer, skillOptimizer } from './skills/skill-optimizer.js';
+
+// 配置优化器
+export { ConfigOptimizer, configOptimizer } from './config/config-optimizer.js';
