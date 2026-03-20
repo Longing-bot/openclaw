@@ -141,3 +141,9 @@ export { MessageOptimizer, messageOptimizer } from './messaging/message-optimize
 
 // 存储优化器
 export { StorageOptimizer, storageOptimizer } from './storage/storage-optimizer.js';
+
+// 异步优化器
+export { AsyncOptimizer, asyncOptimizer } from './utils/async-optimizer.js';
+
+// 并发优化器
+export { ConcurrencyOptimizer, concurrencyOptimizer } from './utils/concurrency-optimizer.js';
