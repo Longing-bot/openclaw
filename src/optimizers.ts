@@ -135,3 +135,9 @@ export { RouteOptimizer, routeOptimizer } from './routing/route-optimizer.js';
 
 // 安全优化器
 export { SecurityOptimizer, securityOptimizer } from './security/security-optimizer.js';
+
+// 消息优化器
+export { MessageOptimizer, messageOptimizer } from './messaging/message-optimizer.js';
+
+// 存储优化器
+export { StorageOptimizer, storageOptimizer } from './storage/storage-optimizer.js';
