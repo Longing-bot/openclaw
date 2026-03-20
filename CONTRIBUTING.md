@@ -1,206 +1,275 @@
-# Contributing to OpenClaw
+# 🤝 Contributing to OpenClaw
 
-Welcome to the lobster tank! 🦞
+Thank you for your interest in contributing to OpenClaw! This document provides guidelines and information for contributors.
 
-## Quick Links
+## 📋 Table of Contents
 
-- **GitHub:** https://github.com/openclaw/openclaw
-- **Vision:** [`VISION.md`](VISION.md)
-- **Discord:** https://discord.gg/qkhbAGHRBT
-- **X/Twitter:** [@steipete](https://x.com/steipete) / [@openclaw](https://x.com/openclaw)
+- [Code of Conduct](#code-of-conduct)
+- [Getting Started](#getting-started)
+- [Development Setup](#development-setup)
+- [Making Changes](#making-changes)
+- [Pull Request Process](#pull-request-process)
+- [Coding Standards](#coding-standards)
+- [Testing](#testing)
+- [Documentation](#documentation)
 
-## Maintainers
+## 📜 Code of Conduct
 
-- **Peter Steinberger** - Benevolent Dictator
-  - GitHub: [@steipete](https://github.com/steipete) · X: [@steipete](https://x.com/steipete)
+This project follows the [Contributor Covenant](https://www.contributor-covenant.org/). By participating, you are expected to uphold this code.
 
-- **Shadow** - Discord subsystem, Discord admin, Clawhub, all community moderation
-  - GitHub: [@thewilloftheshadow](https://github.com/thewilloftheshadow) · X: [@4shadowed](https://x.com/4shadowed)
+## 🚀 Getting Started
 
-- **Vignesh** - Memory (QMD), formal modeling, TUI, IRC, and Lobster
-  - GitHub: [@vignesh07](https://github.com/vignesh07) · X: [@\_vgnsh](https://x.com/_vgnsh)
+### Prerequisites
 
-- **Jos** - Telegram, API, Nix mode
-  - GitHub: [@joshp123](https://github.com/joshp123) · X: [@jjpcodes](https://x.com/jjpcodes)
+- Node.js 24+
+- pnpm (recommended) or npm
+- Git
 
-- **Ayaan Zaidi** - Telegram subsystem, Android app
-  - GitHub: [@obviyus](https://github.com/obviyus) · X: [@0bviyus](https://x.com/0bviyus)
+### Fork and Clone
 
-- **Tyler Yust** - Agents/subagents, cron, BlueBubbles, macOS app
-  - GitHub: [@tyler6204](https://github.com/tyler6204) · X: [@tyleryust](https://x.com/tyleryust)
+1. Fork the repository on GitHub
+2. Clone your fork locally:
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/openclaw.git
+   cd openclaw
+   ```
+3. Add the upstream remote:
+   ```bash
+   git remote add upstream https://github.com/openclaw/openclaw.git
+   ```
 
-- **Mariano Belinky** - iOS app, Security
-  - GitHub: [@mbelinky](https://github.com/mbelinky) · X: [@belimad](https://x.com/belimad)
+## 🛠️ Development Setup
 
-- **Nimrod Gutman** - iOS app, macOS app and crustacean features
-  - GitHub: [@ngutman](https://github.com/ngutman) · X: [@theguti](https://x.com/theguti)
+### Install Dependencies
 
-- **Vincent Koc** - Agents, Telemetry, Hooks, Security
-  - GitHub: [@vincentkoc](https://github.com/vincentkoc) · X: [@vincent_koc](https://x.com/vincent_koc)
-
-- **Val Alexander** - UI/UX, Docs, and Agent DevX
-  - GitHub: [@BunsDev](https://github.com/BunsDev) · X: [@BunsDev](https://x.com/BunsDev)
-
-- **Seb Slight** - Docs, Agent Reliability, Runtime Hardening
-  - GitHub: [@sebslight](https://github.com/sebslight) · X: [@sebslig](https://x.com/sebslig)
-
-- **Christoph Nakazawa** - JS Infra
-  - GitHub: [@cpojer](https://github.com/cpojer) · X: [@cnakazawa](https://x.com/cnakazawa)
-
-- **Gustavo Madeira Santana** - Multi-agents, CLI, Performance, Plugins, Matrix
-  - GitHub: [@gumadeiras](https://github.com/gumadeiras) · X: [@gumadeiras](https://x.com/gumadeiras)
-
-- **Onur Solmaz** - Agents, dev workflows, ACP integrations, MS Teams
-  - GitHub: [@onutc](https://github.com/onutc), [@osolmaz](https://github.com/osolmaz) · X: [@onusoz](https://x.com/onusoz)
-
-- **Josh Avant** - Core, CLI, Gateway, Security, Agents
-  - GitHub: [@joshavant](https://github.com/joshavant) · X: [@joshavant](https://x.com/joshavant)
-
-- **Jonathan Taylor** - ACP subsystem, Gateway features/bugs, Gog/Mog/Sog CLI's, SEDMAT
-  - GitHub [@visionik](https://github.com/visionik) · X: [@visionik](https://x.com/visionik)
-- **Josh Lehman** - Compaction, Tlon/Urbit subsystem
-  - GitHub [@jalehman](https://github.com/jalehman) · X: [@jlehman\_](https://x.com/jlehman_)
-
-- **Radek Sienkiewicz** - Docs, Control UI
-  - GitHub [@velvet-shark](https://github.com/velvet-shark) · X: [@velvet_shark](https://twitter.com/velvet_shark)
-
-- **Muhammed Mukhthar** - Mattermost, CLI
-  - GitHub [@mukhtharcm](https://github.com/mukhtharcm) · X: [@mukhtharcm](https://x.com/mukhtharcm)
-
-- **Altay** - Agents, CLI, error handling
-  - GitHub [@altaywtf](https://github.com/altaywtf) · X: [@altaywtf](https://x.com/altaywtf)
-
-- **Robin Waslander** - Security, PR triage, bug fixes
-  - GitHub: [@hydro13](https://github.com/hydro13) · X: [@Robin_waslander](https://x.com/Robin_waslander)
-
-- **Tengji (George) Zhang** - Chinese model APIs, cloud, pi
-  - GitHub: [@odysseus0](https://github.com/odysseus0) · X: [@odysseus0z](https://x.com/odysseus0z)
-
-- **Andrew (Bubbles) Demczuk** - Agents/Gateway/TTS/VTT
-  - GitHub: [@ademczuk](https://github.com/ademczuk) · X: [@ademczuk](https://x.com/ademczuk)
-
-## How to Contribute
-
-1. **Bugs & small fixes** → Open a PR!
-2. **New features / architecture** → Start a [GitHub Discussion](https://github.com/openclaw/openclaw/discussions) or ask in Discord first
-3. **Test/CI-only PRs for known `main` failures** → Don't open a PR, the Maintainer team is already tracking it and such PRs will be closed automatically. If you've spotted a _new_ regression not yet shown in main CI, report it as an issue first.
-4. **Questions** → Discord [#help](https://discord.com/channels/1456350064065904867/1459642797895319552) / [#users-helping-users](https://discord.com/channels/1456350064065904867/1459007081603403828)
-
-## Before You PR
-
-- Test locally with your OpenClaw instance
-- Run tests: `pnpm build && pnpm check && pnpm test`
-- For extension/plugin changes, run the fast local lane first:
-  - `pnpm test:extension <extension-name>`
-  - `pnpm test:extension --list` to see valid extension ids
-  - If you changed shared plugin or channel surfaces, run `pnpm test:contracts`
-  - For targeted shared-surface work, use `pnpm test:contracts:channels` or `pnpm test:contracts:plugins`
-  - If you changed broader runtime behavior, still run the relevant wider lanes (`pnpm test:extensions`, `pnpm test:channels`, or `pnpm test`) before asking for review
-- If you have access to Codex, run `codex review --base origin/main` locally before opening or updating your PR. Treat this as the current highest standard of AI review, even if GitHub Codex review also runs.
-- Do not submit test or CI-config fixes for failures already red on `main` CI. If a failure is already visible in the [main branch CI runs](https://github.com/openclaw/openclaw/actions), it's a known issue the Maintainer team is tracking, and a PR that only addresses those failures will be closed automatically. If you spot a _new_ regression not yet shown in main CI, report it as an issue first.
-- Ensure CI checks pass
-- Keep PRs focused (one thing per PR; do not mix unrelated concerns)
-- Describe what & why
-- Reply to or resolve bot review conversations you addressed before asking for review again
-- **Include screenshots** — one showing the problem/before, one showing the fix/after (for UI or visual changes)
-- Use American English spelling and grammar in code, comments, docs, and UI strings
-- Do not edit files covered by `CODEOWNERS` security ownership unless a listed owner explicitly asked for the change or is already reviewing it with you. Treat those paths as restricted review surfaces, not opportunistic cleanup targets.
-
-## Review Conversations Are Author-Owned
-
-If a review bot leaves review conversations on your PR, you are expected to handle the follow-through:
-
-- Resolve the conversation yourself once the code or explanation fully addresses the bot's concern
-- Reply and leave it open only when you need maintainer or reviewer judgment
-- Do not leave "fixed" bot review conversations for maintainers to clean up for you
-- If Codex leaves comments, address every relevant one or resolve it with a short explanation when it is not applicable to your change
-- If GitHub Codex review does not trigger for some reason, run `codex review --base origin/main` locally anyway and treat that output as required review work
-
-This applies to both human-authored and AI-assisted PRs.
-
-## Control UI Decorators
-
-The Control UI uses Lit with **legacy** decorators (current Rollup parsing does not support
-`accessor` fields required for standard decorators). When adding reactive fields, keep the
-legacy style:
-
-```ts
-@state() foo = "bar";
-@property({ type: Number }) count = 0;
+```bash
+pnpm install
 ```
 
-The root `tsconfig.json` is configured for legacy decorators (`experimentalDecorators: true`)
-with `useDefineForClassFields: false`. Avoid flipping these unless you are also updating the UI
-build tooling to support standard decorators.
+### Build the Project
 
-## AI/Vibe-Coded PRs Welcome! 🤖
+```bash
+pnpm build
+```
 
-Built with Codex, Claude, or other AI tools? **Awesome - just mark it!**
+### Run Tests
 
-Please include in your PR:
+```bash
+pnpm test
+```
 
-- [ ] Mark as AI-assisted in the PR title or description
-- [ ] Note the degree of testing (untested / lightly tested / fully tested)
-- [ ] Include prompts or session logs if possible (super helpful!)
-- [ ] Confirm you understand what the code does
-- [ ] If you have access to Codex, run `codex review --base origin/main` locally and address the findings before asking for review
-- [ ] Resolve or reply to bot review conversations after you address them
+### Start Development Server
 
-AI PRs are first-class citizens here. We just want transparency so reviewers know what to look for. If you are using an LLM coding agent, instruct it to resolve bot review conversations it has addressed instead of leaving them for maintainers.
+```bash
+pnpm dev
+```
 
-## Current Focus & Roadmap 🗺
+## 🔄 Making Changes
 
-We are currently prioritizing:
+### Branch Strategy
 
-- **Stability**: Fixing edge cases in channel connections (WhatsApp/Telegram).
-- **UX**: Improving the onboarding wizard and error messages.
-- **Skills**: For skill contributions, head to [ClawHub](https://clawhub.ai/) — the community hub for OpenClaw skills.
-- **Performance**: Optimizing token usage and compaction logic.
+- `main` - stable release branch
+- `develop` - development branch
+- `feature/*` - new features
+- `bugfix/*` - bug fixes
+- `hotfix/*` - critical fixes
 
-Check the [GitHub Issues](https://github.com/openclaw/openclaw/issues) for "good first issue" labels!
+### Create a Branch
 
-## Maintainers
+```bash
+git checkout -b feature/your-feature-name
+# or
+git checkout -b bugfix/your-bug-fix
+```
 
-We're selectively expanding the maintainer team.
-If you're an experienced contributor who wants to help shape OpenClaw's direction — whether through code, docs, or community — we'd like to hear from you.
+### Commit Messages
 
-Being a maintainer is a responsibility, not an honorary title. We expect active, consistent involvement — triaging issues, reviewing PRs, and helping move the project forward.
+Follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
 
-Still interested? Email contributing@openclaw.ai with:
+```
+type(scope): description
 
-- Links to your PRs on OpenClaw (if you don't have any, start there first)
-- Links to open source projects you maintain or actively contribute to
-- Your GitHub, Discord, and X/Twitter handles
-- A brief intro: background, experience, and areas of interest
-- Languages you speak and where you're based
-- How much time you can realistically commit
+[optional body]
 
-We welcome people across all skill sets — engineering, documentation, community management, and more.
-We review every human-only-written application carefully and add maintainers slowly and deliberately.
-Please allow a few weeks for a response.
+[optional footer]
+```
 
-## Report a Vulnerability
+Types:
+- `feat` - new feature
+- `fix` - bug fix
+- `docs` - documentation
+- `style` - formatting
+- `refactor` - code refactoring
+- `test` - adding tests
+- `chore` - maintenance
 
-We take security reports seriously. Report vulnerabilities directly to the repository where the issue lives:
+Examples:
+```
+feat(channels): add WhatsApp channel support
+fix(gateway): resolve connection timeout issue
+docs(readme): update installation instructions
+```
 
-- **Core CLI and gateway** — [openclaw/openclaw](https://github.com/openclaw/openclaw)
-- **macOS desktop app** — [openclaw/openclaw](https://github.com/openclaw/openclaw) (apps/macos)
-- **iOS app** — [openclaw/openclaw](https://github.com/openclaw/openclaw) (apps/ios)
-- **Android app** — [openclaw/openclaw](https://github.com/openclaw/openclaw) (apps/android)
-- **ClawHub** — [openclaw/clawhub](https://github.com/openclaw/clawhub)
-- **Trust and threat model** — [openclaw/trust](https://github.com/openclaw/trust)
+## 🔀 Pull Request Process
 
-For issues that don't fit a specific repo, or if you're unsure, email **security@openclaw.ai** and we'll route it.
+1. Update your branch with the latest changes from upstream:
+   ```bash
+   git fetch upstream
+   git rebase upstream/main
+   ```
 
-### Required in Reports
+2. Push your changes to your fork:
+   ```bash
+   git push origin feature/your-feature-name
+   ```
 
-1. **Title**
-2. **Severity Assessment**
-3. **Impact**
-4. **Affected Component**
-5. **Technical Reproduction**
-6. **Demonstrated Impact**
-7. **Environment**
-8. **Remediation Advice**
+3. Create a Pull Request on GitHub
 
-Reports without reproduction steps, demonstrated impact, and remediation advice will be deprioritized. Given the volume of AI-generated scanner findings, we must ensure we're receiving vetted reports from researchers who understand the issues.
+4. Fill out the PR template completely
+
+5. Wait for review and address any feedback
+
+6. Once approved, your PR will be merged
+
+## 📏 Coding Standards
+
+### TypeScript
+
+- Use TypeScript for all new code
+- Enable strict mode
+- Use interfaces for object shapes
+- Prefer `const` over `let`
+- Use async/await over Promises
+
+### Code Style
+
+- Follow the existing code style
+- Use ESLint and Prettier
+- Keep functions small and focused
+- Write self-documenting code
+- Add comments for complex logic
+
+### File Organization
+
+```
+src/
+├── channels/          # Channel implementations
+├── providers/         # AI provider integrations
+├── skills/           # Skill implementations
+├── utils/            # Utility functions
+└── types/            # TypeScript type definitions
+```
+
+## 🧪 Testing
+
+### Test Structure
+
+```
+test/
+├── unit/             # Unit tests
+├── integration/      # Integration tests
+└── e2e/              # End-to-end tests
+```
+
+### Writing Tests
+
+```typescript
+import { describe, it, expect } from 'vitest';
+
+describe('Feature', () => {
+  it('should do something', () => {
+    expect(true).toBe(true);
+  });
+});
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+pnpm test
+
+# Run unit tests only
+pnpm test:unit
+
+# Run integration tests only
+pnpm test:integration
+
+# Run with coverage
+pnpm test:coverage
+```
+
+## 📚 Documentation
+
+### Code Documentation
+
+- Use JSDoc for function documentation
+- Add inline comments for complex logic
+- Keep README files up to date
+
+### API Documentation
+
+- Document all public APIs
+- Include usage examples
+- Keep documentation in sync with code
+
+## 🐛 Reporting Bugs
+
+### Bug Report Template
+
+```markdown
+**Describe the bug**
+A clear description of what the bug is.
+
+**To Reproduce**
+Steps to reproduce the behavior:
+1. Go to '...'
+2. Click on '...'
+3. Scroll down to '...'
+4. See error
+
+**Expected behavior**
+A clear description of what you expected to happen.
+
+**Screenshots**
+If applicable, add screenshots.
+
+**Environment:**
+- OS: [e.g., macOS, Windows, Linux]
+- Node.js version: [e.g., 24.0.0]
+- OpenClaw version: [e.g., 2026.3.14]
+```
+
+## 💡 Feature Requests
+
+### Feature Request Template
+
+```markdown
+**Is your feature request related to a problem?**
+A clear description of the problem.
+
+**Describe the solution you'd like**
+A clear description of what you want to happen.
+
+**Describe alternatives you've considered**
+A clear description of any alternative solutions.
+
+**Additional context**
+Any other context about the feature request.
+```
+
+## 📞 Getting Help
+
+- [Discord Community](https://discord.gg/clawd)
+- [GitHub Issues](https://github.com/openclaw/openclaw/issues)
+- [Documentation](https://docs.openclaw.ai)
+
+## 🙏 Thank You
+
+Thank you for contributing to OpenClaw! Your contributions help make this project better for everyone.
+
+---
+
+<p align="center">
+  Made with ❤️ by the OpenClaw community
+</p>
