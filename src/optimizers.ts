@@ -126,3 +126,12 @@ export { SkillOptimizer, skillOptimizer } from './skills/skill-optimizer.js';
 
 // 配置优化器
 export { ConfigOptimizer, configOptimizer } from './config/config-optimizer.js';
+
+// 日志优化器
+export { LogOptimizer, logOptimizer } from './logging/log-optimizer.js';
+
+// 路由优化器
+export { RouteOptimizer, routeOptimizer } from './routing/route-optimizer.js';
+
+// 安全优化器
+export { SecurityOptimizer, securityOptimizer } from './security/security-optimizer.js';
