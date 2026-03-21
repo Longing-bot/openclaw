@@ -184,3 +184,10 @@ export {
   getGlobalAutonomousOptimizer,
   resetGlobalAutonomousOptimizer,
 } from './self-awareness/self-driven.js';
+
+// 优化仪表板
+export {
+  OptimizationDashboard,
+  getGlobalDashboard,
+  resetGlobalDashboard,
+} from './dashboard/optimization-dashboard.js';

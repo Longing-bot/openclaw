@@ -56,6 +56,12 @@ class Agent {
   status: 'idle' | 'busy' | 'offline' = 'idle';
   currentTasks: string[] = [];
   sessionKey?: string;
+  
+  // 性能追踪
+  private completedTasks = 0;
+  private failedTasks = 0;
+  private totalResponseTime = 0;
+  private lastActiveTime = Date.now();
 
   constructor(id: string, role: AgentRole) {
     this.id = id;
@@ -70,13 +76,54 @@ class Agent {
   assignTask(taskId: string): void {
     this.currentTasks.push(taskId);
     this.status = 'busy';
+    this.lastActiveTime = Date.now();
   }
 
-  completeTask(taskId: string): void {
+  completeTask(taskId: string, success = true): void {
     this.currentTasks = this.currentTasks.filter(id => id !== taskId);
     if (this.currentTasks.length === 0) {
       this.status = 'idle';
     }
+    
+    // 更新性能统计
+    if (success) {
+      this.completedTasks++;
+    } else {
+      this.failedTasks++;
+    }
+    this.lastActiveTime = Date.now();
+  }
+
+  /**
+   * 获取智能体性能指标
+   */
+  getPerformanceMetrics(): {
+    successRate: number;
+    totalTasks: number;
+    averageResponseTime: number;
+    utilizationRate: number;
+  } {
+    const totalTasks = this.completedTasks + this.failedTasks;
+    return {
+      successRate: totalTasks > 0 ? this.completedTasks / totalTasks : 1,
+      totalTasks,
+      averageResponseTime: totalTasks > 0 ? this.totalResponseTime / totalTasks : 0,
+      utilizationRate: this.currentTasks.length / this.role.maxConcurrentTasks,
+    };
+  }
+
+  /**
+   * 记录响应时间
+   */
+  recordResponseTime(timeMs: number): void {
+    this.totalResponseTime += timeMs;
+  }
+
+  /**
+   * 获取闲置时间
+   */
+  getIdleTime(): number {
+    return this.status === 'idle' ? Date.now() - this.lastActiveTime : 0;
   }
 }
 
@@ -210,14 +257,14 @@ export class AgentSwarm extends EventEmitter {
   }
 
   /**
-   * 分配任务给最合适的智能体
+   * 分配任务给最合适的智能体（考虑性能指标）
    */
   assignTask(task: AgentTask): Agent | null {
     // 找到能处理此任务的空闲智能体
     const availableAgents = Array.from(this.agents.values())
       .filter(agent => agent.canAcceptTask())
       .sort((a, b) => {
-        // 优先选择专业匹配的智能体
+        // 1. 优先选择专业匹配的智能体
         const aExpertise = a.role.expertise.some(e => 
           task.description.toLowerCase().includes(e.toLowerCase())
         );
@@ -228,7 +275,23 @@ export class AgentSwarm extends EventEmitter {
         if (aExpertise && !bExpertise) return -1;
         if (!aExpertise && bExpertise) return 1;
         
-        // 其次选择任务少的
+        // 2. 考虑性能指标
+        const aMetrics = a.getPerformanceMetrics();
+        const bMetrics = b.getPerformanceMetrics();
+        
+        // 成功率差异显著时，优先选成功率高的
+        const successRateDiff = bMetrics.successRate - aMetrics.successRate;
+        if (Math.abs(successRateDiff) > 0.2) {
+          return successRateDiff > 0 ? 1 : -1;
+        }
+        
+        // 3. 负载均衡：选择利用率低的
+        const utilizationDiff = aMetrics.utilizationRate - bMetrics.utilizationRate;
+        if (Math.abs(utilizationDiff) > 0.1) {
+          return utilizationDiff > 0 ? 1 : -1;
+        }
+        
+        // 4. 最后选择任务少的
         return a.currentTasks.length - b.currentTasks.length;
       });
 
@@ -242,6 +305,7 @@ export class AgentSwarm extends EventEmitter {
     this.taskManager.updateTask(task.id, {
       assignedTo: selectedAgent.id,
       status: 'assigned',
+      startedAt: new Date(),
     });
 
     // 通知智能体
