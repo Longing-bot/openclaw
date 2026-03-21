@@ -160,15 +160,6 @@ export {
   resetGlobalContextOptimizer,
 } from './context-engine/context-optimizer.js';
 
-// 多智能体协作（ClawTeam集成）
-export {
-  ClawTeamIntegrator,
-  SmartCodeReviewer,
-  getGlobalClawTeamIntegrator,
-  getGlobalCodeReviewer,
-  resetGlobalClawTeam,
-} from './multi-agent/clawteam-integration.js';
-
 // 原生多智能体协作系统
 export {
   AgentSwarm,
@@ -180,9 +171,7 @@ export {
 // 自我意识与自我驱动系统
 export {
   SelfDrivenEngine,
-  AutonomousOptimizer,
-  getGlobalAutonomousOptimizer,
-  resetGlobalAutonomousOptimizer,
+  getGlobalSelfDrivenEngine,
 } from './self-awareness/self-driven.js';
 
 // 优化仪表板

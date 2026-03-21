@@ -1,531 +1,101 @@
 /**
- * OpenClaw 原生多智能体协作系统
- * 
- * 基于 OpenClaw 原生 subagent 能力，不依赖外部工具
+ * OpenClaw 原生多智能体协作（精简版）
  */
-
-import { EventEmitter } from 'events';
-
-// ==================== 类型定义 ====================
 
 export interface AgentRole {
   name: string;
   type: string;
   expertise: string[];
-  systemPrompt: string;
-  maxConcurrentTasks: number;
+  maxTasks: number;
 }
 
-export interface AgentTask {
+export interface Task {
   id: string;
   title: string;
-  description: string;
   assignedTo?: string;
-  status: 'pending' | 'assigned' | 'in-progress' | 'completed' | 'failed';
-  priority: 'low' | 'medium' | 'high' | 'critical';
-  createdAt: Date;
-  startedAt?: Date;
-  completedAt?: Date;
-  result?: string;
-  dependencies?: string[];
+  status: 'pending' | 'assigned' | 'completed';
 }
-
-export interface AgentMessage {
-  id: string;
-  from: string;
-  to: string | 'broadcast';
-  type: 'task' | 'result' | 'query' | 'response' | 'status';
-  content: string;
-  timestamp: Date;
-  metadata?: Record<string, unknown>;
-}
-
-export interface SwarmConfig {
-  name: string;
-  goal: string;
-  roles: AgentRole[];
-  maxAgents: number;
-  coordinationStrategy: 'centralized' | 'distributed' | 'hierarchical';
-}
-
-// ==================== 智能体实例 ====================
 
 class Agent {
-  readonly id: string;
-  readonly role: AgentRole;
-  status: 'idle' | 'busy' | 'offline' = 'idle';
-  currentTasks: string[] = [];
-  sessionKey?: string;
-  
-  // 性能追踪
-  private completedTasks = 0;
-  private failedTasks = 0;
-  private totalResponseTime = 0;
-  private lastActiveTime = Date.now();
-
-  constructor(id: string, role: AgentRole) {
-    this.id = id;
-    this.role = role;
-  }
+  constructor(
+    public id: string,
+    public role: AgentRole,
+    public status: 'idle' | 'busy' = 'idle',
+    public tasks: string[] = []
+  ) {}
 
   canAcceptTask(): boolean {
-    return this.status !== 'offline' && 
-           this.currentTasks.length < this.role.maxConcurrentTasks;
-  }
-
-  assignTask(taskId: string): void {
-    this.currentTasks.push(taskId);
-    this.status = 'busy';
-    this.lastActiveTime = Date.now();
-  }
-
-  completeTask(taskId: string, success = true): void {
-    this.currentTasks = this.currentTasks.filter(id => id !== taskId);
-    if (this.currentTasks.length === 0) {
-      this.status = 'idle';
-    }
-    
-    // 更新性能统计
-    if (success) {
-      this.completedTasks++;
-    } else {
-      this.failedTasks++;
-    }
-    this.lastActiveTime = Date.now();
-  }
-
-  /**
-   * 获取智能体性能指标
-   */
-  getPerformanceMetrics(): {
-    successRate: number;
-    totalTasks: number;
-    averageResponseTime: number;
-    utilizationRate: number;
-  } {
-    const totalTasks = this.completedTasks + this.failedTasks;
-    return {
-      successRate: totalTasks > 0 ? this.completedTasks / totalTasks : 1,
-      totalTasks,
-      averageResponseTime: totalTasks > 0 ? this.totalResponseTime / totalTasks : 0,
-      utilizationRate: this.currentTasks.length / this.role.maxConcurrentTasks,
-    };
-  }
-
-  /**
-   * 记录响应时间
-   */
-  recordResponseTime(timeMs: number): void {
-    this.totalResponseTime += timeMs;
-  }
-
-  /**
-   * 获取闲置时间
-   */
-  getIdleTime(): number {
-    return this.status === 'idle' ? Date.now() - this.lastActiveTime : 0;
+    return this.status !== 'busy' && this.tasks.length < this.role.maxTasks;
   }
 }
 
-// ==================== 任务管理器 ====================
-
-class TaskManager {
-  private tasks = new Map<string, AgentTask>();
-
-  createTask(task: Omit<AgentTask, 'id' | 'createdAt' | 'status'>): AgentTask {
-    const id = `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const newTask: AgentTask = {
-      ...task,
-      id,
-      status: 'pending',
-      createdAt: new Date(),
-    };
-    this.tasks.set(id, newTask);
-    return newTask;
-  }
-
-  getTask(id: string): AgentTask | undefined {
-    return this.tasks.get(id);
-  }
-
-  updateTask(id: string, updates: Partial<AgentTask>): void {
-    const task = this.tasks.get(id);
-    if (task) {
-      Object.assign(task, updates);
-    }
-  }
-
-  getPendingTasks(): AgentTask[] {
-    return Array.from(this.tasks.values())
-      .filter(t => t.status === 'pending')
-      .sort((a, b) => {
-        const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
-        return priorityOrder[a.priority] - priorityOrder[b.priority];
-      });
-  }
-
-  getTasksByStatus(status: AgentTask['status']): AgentTask[] {
-    return Array.from(this.tasks.values()).filter(t => t.status === status);
-  }
-}
-
-// ==================== 消息总线 ====================
-
-class MessageBus extends EventEmitter {
-  private messages: AgentMessage[] = [];
-  private inbox = new Map<string, AgentMessage[]>();
-
-  send(message: Omit<AgentMessage, 'id' | 'timestamp'>): void {
-    const fullMessage: AgentMessage = {
-      ...message,
-      id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      timestamp: new Date(),
-    };
-
-    this.messages.push(fullMessage);
-
-    if (message.to === 'broadcast') {
-      this.emit('broadcast', fullMessage);
-    } else {
-      const inbox = this.inbox.get(message.to) || [];
-      inbox.push(fullMessage);
-      this.inbox.set(message.to, inbox);
-      this.emit(`message:${message.to}`, fullMessage);
-    }
-
-    this.emit('message', fullMessage);
-  }
-
-  getInbox(agentId: string): AgentMessage[] {
-    return this.inbox.get(agentId) || [];
-  }
-
-  clearInbox(agentId: string): void {
-    this.inbox.set(agentId, []);
-  }
-
-  getRecentMessages(count = 50): AgentMessage[] {
-    return this.messages.slice(-count);
-  }
-}
-
-// ==================== 智能体协调器 ====================
-
-export class AgentSwarm extends EventEmitter {
-  readonly config: SwarmConfig;
+export class AgentSwarm {
   private agents = new Map<string, Agent>();
-  private taskManager = new TaskManager();
-  private messageBus = new MessageBus();
-  private isRunning = false;
+  private tasks = new Map<string, Task>();
 
-  constructor(config: SwarmConfig) {
-    super();
-    this.config = config;
-    this.setupMessageHandlers();
+  addAgent(role: AgentRole): string {
+    const id = `agent-${Date.now()}`;
+    this.agents.set(id, new Agent(id, role));
+    return id;
   }
 
-  private setupMessageHandlers(): void {
-    this.messageBus.on('message', (msg: AgentMessage) => {
-      this.emit('message', msg);
-    });
-
-    this.messageBus.on('broadcast', (msg: AgentMessage) => {
-      // 广播给所有智能体
-      for (const agent of this.agents.values()) {
-        this.emit(`agent:${agent.id}:message`, msg);
-      }
-    });
-  }
-
-  /**
-   * 添加智能体
-   */
-  addAgent(role: AgentRole): Agent {
-    const id = `agent-${role.name}-${Date.now()}`;
-    const agent = new Agent(id, role);
-    this.agents.set(id, agent);
-    this.emit('agent:added', agent);
-    return agent;
-  }
-
-  /**
-   * 移除智能体
-   */
-  removeAgent(agentId: string): void {
-    this.agents.delete(agentId);
-    this.emit('agent:removed', agentId);
-  }
-
-  /**
-   * 分配任务给最合适的智能体（考虑性能指标）
-   */
-  assignTask(task: AgentTask): Agent | null {
-    // 找到能处理此任务的空闲智能体
-    const availableAgents = Array.from(this.agents.values())
-      .filter(agent => agent.canAcceptTask())
-      .sort((a, b) => {
-        // 1. 优先选择专业匹配的智能体
-        const aExpertise = a.role.expertise.some(e => 
-          task.description.toLowerCase().includes(e.toLowerCase())
-        );
-        const bExpertise = b.role.expertise.some(e => 
-          task.description.toLowerCase().includes(e.toLowerCase())
-        );
-        
-        if (aExpertise && !bExpertise) return -1;
-        if (!aExpertise && bExpertise) return 1;
-        
-        // 2. 考虑性能指标
-        const aMetrics = a.getPerformanceMetrics();
-        const bMetrics = b.getPerformanceMetrics();
-        
-        // 成功率差异显著时，优先选成功率高的
-        const successRateDiff = bMetrics.successRate - aMetrics.successRate;
-        if (Math.abs(successRateDiff) > 0.2) {
-          return successRateDiff > 0 ? 1 : -1;
-        }
-        
-        // 3. 负载均衡：选择利用率低的
-        const utilizationDiff = aMetrics.utilizationRate - bMetrics.utilizationRate;
-        if (Math.abs(utilizationDiff) > 0.1) {
-          return utilizationDiff > 0 ? 1 : -1;
-        }
-        
-        // 4. 最后选择任务少的
-        return a.currentTasks.length - b.currentTasks.length;
-      });
-
-    if (availableAgents.length === 0) {
-      return null;
-    }
-
-    const selectedAgent = availableAgents[0];
-    selectedAgent.assignTask(task.id);
-    
-    this.taskManager.updateTask(task.id, {
-      assignedTo: selectedAgent.id,
-      status: 'assigned',
-      startedAt: new Date(),
-    });
-
-    // 通知智能体
-    this.messageBus.send({
-      from: 'coordinator',
-      to: selectedAgent.id,
-      type: 'task',
-      content: JSON.stringify(task),
-    });
-
-    this.emit('task:assigned', { task, agent: selectedAgent });
-    return selectedAgent;
-  }
-
-  /**
-   * 创建并分配任务
-   */
-  createTask(taskInfo: Omit<AgentTask, 'id' | 'createdAt' | 'status'>): AgentTask {
-    const task = this.taskManager.createTask(taskInfo);
-    this.emit('task:created', task);
-
-    // 尝试立即分配
-    if (task.status === 'pending') {
-      this.assignTask(task);
-    }
-
+  createTask(title: string): Task {
+    const id = `task-${Date.now()}`;
+    const task: Task = { id, title, status: 'pending' };
+    this.tasks.set(id, task);
+    this.autoAssign(task);
     return task;
   }
 
-  /**
-   * 完成任务
-   */
-  completeTask(taskId: string, result: string): void {
-    const task = this.taskManager.getTask(taskId);
-    if (!task || !task.assignedTo) return;
+  private autoAssign(task: Task): void {
+    const available = [...this.agents.values()]
+      .filter(a => a.canAcceptTask())
+      .sort((a, b) => a.tasks.length - b.tasks.length)[0];
+
+    if (available) {
+      task.assignedTo = available.id;
+      task.status = 'assigned';
+      available.tasks.push(task.id);
+      available.status = 'busy';
+    }
+  }
+
+  completeTask(taskId: string): void {
+    const task = this.tasks.get(taskId);
+    if (!task?.assignedTo) return;
 
     const agent = this.agents.get(task.assignedTo);
     if (agent) {
-      agent.completeTask(taskId);
+      agent.tasks = agent.tasks.filter(id => id !== taskId);
+      agent.status = agent.tasks.length > 0 ? 'busy' : 'idle';
     }
-
-    this.taskManager.updateTask(taskId, {
-      status: 'completed',
-      completedAt: new Date(),
-      result,
-    });
-
-    this.emit('task:completed', { taskId, result });
-
-    // 尝试分配新任务
-    this.assignPendingTasks();
+    task.status = 'completed';
   }
 
-  /**
-   * 分配所有待处理任务
-   */
-  private assignPendingTasks(): void {
-    const pendingTasks = this.taskManager.getPendingTasks();
-    for (const task of pendingTasks) {
-      if (task.status === 'pending') {
-        this.assignTask(task);
-      }
-    }
-  }
-
-  /**
-   * 获取状态
-   */
-  getStatus(): {
-    agents: Array<{ id: string; role: string; status: string; tasks: number }>;
-    tasks: { pending: number; assigned: number; inProgress: number; completed: number };
-    isRunning: boolean;
-  } {
+  getStatus() {
     return {
-      agents: Array.from(this.agents.values()).map(a => ({
+      agents: [...this.agents.values()].map(a => ({
         id: a.id,
         role: a.role.name,
         status: a.status,
-        tasks: a.currentTasks.length,
+        tasks: a.tasks.length,
       })),
-      tasks: {
-        pending: this.taskManager.getTasksByStatus('pending').length,
-        assigned: this.taskManager.getTasksByStatus('assigned').length,
-        inProgress: this.taskManager.getTasksByStatus('in-progress').length,
-        completed: this.taskManager.getTasksByStatus('completed').length,
-      },
-      isRunning: this.isRunning,
+      pendingTasks: [...this.tasks.values()].filter(t => t.status === 'pending').length,
+      completedTasks: [...this.tasks.values()].filter(t => t.status === 'completed').length,
     };
   }
-
-  /**
-   * 启动协调循环
-   */
-  start(): void {
-    this.isRunning = true;
-    this.emit('started');
-    
-    // 定期检查并分配任务
-    const interval = setInterval(() => {
-      if (!this.isRunning) {
-        clearInterval(interval);
-        return;
-      }
-      this.assignPendingTasks();
-    }, 1000);
-  }
-
-  /**
-   * 停止协调
-   */
-  stop(): void {
-    this.isRunning = false;
-    this.emit('stopped');
-  }
-
-  /**
-   * 获取消息总线
-   */
-  getMessageBus(): MessageBus {
-    return this.messageBus;
-  }
-
-  /**
-   * 获取任务管理器
-   */
-  getTaskManager(): TaskManager {
-    return this.taskManager;
-  }
 }
 
-// ==================== 预定义角色模板 ====================
-
+// 预定义角色
 export const BUILT_IN_ROLES = {
-  coordinator: {
-    name: 'coordinator',
-    type: 'coordinator',
-    expertise: ['planning', 'coordination', 'management'],
-    systemPrompt: '你是一个团队协调者，负责分配任务、监督进度、整合结果。',
-    maxConcurrentTasks: 5,
-  },
-  coder: {
-    name: 'coder',
-    type: 'developer',
-    expertise: ['coding', 'implementation', 'debugging'],
-    systemPrompt: '你是一个专业的开发者，负责编写和优化代码。',
-    maxConcurrentTasks: 2,
-  },
-  reviewer: {
-    name: 'reviewer',
-    type: 'quality',
-    expertise: ['review', 'testing', 'quality-assurance'],
-    systemPrompt: '你是一个代码审查专家，负责审查代码质量、安全性和性能。',
-    maxConcurrentTasks: 3,
-  },
-  researcher: {
-    name: 'researcher',
-    type: 'analysis',
-    expertise: ['research', 'analysis', 'documentation'],
-    systemPrompt: '你是一个研究员，负责收集信息、分析数据、撰写文档。',
-    maxConcurrentTasks: 2,
-  },
-  security: {
-    name: 'security',
-    type: 'security',
-    expertise: ['security', 'vulnerability', 'audit'],
-    systemPrompt: '你是一个安全专家，负责发现和修复安全漏洞。',
-    maxConcurrentTasks: 2,
-  },
-  performance: {
-    name: 'performance',
-    type: 'optimization',
-    expertise: ['performance', 'optimization', 'profiling'],
-    systemPrompt: '你是一个性能优化专家，负责分析和优化系统性能。',
-    maxConcurrentTasks: 2,
-  },
+  coordinator: { name: 'coordinator', type: 'coordinator', expertise: ['planning'], maxTasks: 5 },
+  coder: { name: 'coder', type: 'developer', expertise: ['coding'], maxTasks: 2 },
+  reviewer: { name: 'reviewer', type: 'quality', expertise: ['review'], maxTasks: 3 },
 } as const;
 
-// ==================== 工厂函数 ====================
-
-export function createCodeReviewSwarm(goal: string): AgentSwarm {
-  const swarm = new AgentSwarm({
-    name: 'code-review-swarm',
-    goal,
-    roles: [
-      BUILT_IN_ROLES.coordinator,
-      BUILT_IN_ROLES.reviewer,
-      BUILT_IN_ROLES.security,
-      BUILT_IN_ROLES.performance,
-    ],
-    maxAgents: 4,
-    coordinationStrategy: 'hierarchical',
-  });
-
-  // 添加预定义角色
+export function createCodeReviewSwarm(): AgentSwarm {
+  const swarm = new AgentSwarm();
   swarm.addAgent(BUILT_IN_ROLES.coordinator);
   swarm.addAgent(BUILT_IN_ROLES.reviewer);
-  swarm.addAgent(BUILT_IN_ROLES.security);
-  swarm.addAgent(BUILT_IN_ROLES.performance);
-
-  return swarm;
-}
-
-export function createDevelopmentSwarm(goal: string): AgentSwarm {
-  const swarm = new AgentSwarm({
-    name: 'development-swarm',
-    goal,
-    roles: [
-      BUILT_IN_ROLES.coordinator,
-      BUILT_IN_ROLES.coder,
-      BUILT_IN_ROLES.reviewer,
-      BUILT_IN_ROLES.researcher,
-    ],
-    maxAgents: 4,
-    coordinationStrategy: 'hierarchical',
-  });
-
-  swarm.addAgent(BUILT_IN_ROLES.coordinator);
-  swarm.addAgent(BUILT_IN_ROLES.coder);
-  swarm.addAgent(BUILT_IN_ROLES.reviewer);
-  swarm.addAgent(BUILT_IN_ROLES.researcher);
-
   return swarm;
 }
