@@ -120,3 +120,36 @@ export {
   type MemoryEntry,
   type ProgressStep,
 } from './utils/longing-tools.js';
+
+// ==================== 增强记忆系统 ====================
+export {
+  EnhancedMemory,
+  createEnhancedMemory,
+  type MemoryItem,
+  type MemoryQuery,
+} from './memory/enhanced-memory.js';
+
+// ==================== 多模态处理器 ====================
+export {
+  MultiModalProcessor,
+  createMultiModalProcessor,
+  type MediaFile,
+  type MediaAnalysis,
+} from './multimodal/processor.js';
+
+// ==================== 技能管理器 ====================
+export {
+  SkillManager,
+  createSkillManager,
+  BUILTIN_SKILLS,
+  type Skill,
+  type SkillManifest,
+} from './skills/manager.js';
+
+// ==================== 配置管理器 ====================
+export {
+  ConfigManager,
+  createConfigManager,
+  DEFAULT_CONFIG,
+  type SuperClawConfig,
+} from './config/manager.js';
