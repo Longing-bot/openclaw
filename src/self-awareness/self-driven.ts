@@ -47,10 +47,13 @@ export class SelfDrivenEngine {
   private reflectionLog: Reflection[] = [];
   private actionQueue: Array<() => Promise<void>> = [];
   private isRunning = false;
+  private learningPatterns = new Map<string, { success: number; failure: number }>();
+  private performanceHistory: Array<{ timestamp: Date; metrics: Record<string, number> }> = [];
 
   constructor() {
     this.awareness = this.initializeAwareness();
     this.startSelfReflectionCycle();
+    this.startPerformanceTracking();
   }
 
   private initializeAwareness(): SelfAwareness {
@@ -335,19 +338,145 @@ export class SelfDrivenEngine {
     console.log(`自主执行任务: ${task.description}`);
     task.status = 'in-progress';
 
-    // 这里应该根据任务类型调用相应的执行逻辑
-    // 例如：
-    // - 如果是优化任务，调用优化器
-    // - 如果是学习任务，进行学习
-    // - 如果是改进任务，实施改进
+    try {
+      // 根据任务类型执行
+      const result = await this.executeTaskByType(task);
+      
+      // 记录成功模式
+      this.recordLearningPattern(task.description, true);
+      
+      task.status = 'completed';
+      this.completeGoal(task.id, result);
+      
+      return true;
+    } catch (error) {
+      // 记录失败模式
+      this.recordLearningPattern(task.description, false);
+      
+      task.status = 'pending'; // 重新排队
+      console.error(`任务执行失败: ${task.description}`, error);
+      
+      return false;
+    }
+  }
 
+  /**
+   * 根据任务类型执行
+   */
+  private async executeTaskByType(task: Goal): Promise<string> {
+    // 这里可以根据任务类型调用不同的执行器
+    // 例如：优化任务、学习任务、改进任务等
+    
     // 模拟执行
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    task.status = 'completed';
-    this.completeGoal(task.id, '自主完成');
+    return `${task.description} - 已完成`;
+  }
 
-    return true;
+  /**
+   * 记录学习模式
+   */
+  private recordLearningPattern(pattern: string, success: boolean): void {
+    const current = this.learningPatterns.get(pattern) || { success: 0, failure: 0 };
+    
+    if (success) {
+      current.success++;
+    } else {
+      current.failure++;
+    }
+    
+    this.learningPatterns.set(pattern, current);
+  }
+
+  /**
+   * 启动性能追踪
+   */
+  private startPerformanceTracking(): void {
+    // 每小时记录一次性能
+    setInterval(() => {
+      this.trackPerformance();
+    }, 60 * 60 * 1000);
+  }
+
+  /**
+   * 追踪性能
+   */
+  private trackPerformance(): void {
+    const metrics = {
+      completedGoals: this.awareness.goals.shortTerm.concat(this.awareness.goals.longTerm)
+        .filter(g => g.status === 'completed').length,
+      activeGoals: this.awareness.goals.shortTerm.concat(this.awareness.goals.longTerm)
+        .filter(g => g.status === 'in-progress').length,
+      improvementAreas: this.awareness.state.improvementAreas.length,
+      achievements: this.awareness.state.achievements.length,
+    };
+
+    this.performanceHistory.push({
+      timestamp: new Date(),
+      metrics,
+    });
+
+    // 只保留最近168小时（7天）的数据
+    const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    this.performanceHistory = this.performanceHistory.filter(
+      p => p.timestamp.getTime() > oneWeekAgo
+    );
+  }
+
+  /**
+   * 获取学习统计
+   */
+  getLearningStats(): {
+    patterns: Array<{ pattern: string; successRate: number; total: number }>;
+    performanceTrend: 'improving' | 'stable' | 'declining';
+  } {
+    // 计算模式成功率
+    const patterns = Array.from(this.learningPatterns.entries()).map(([pattern, stats]) => ({
+      pattern,
+      successRate: stats.success / (stats.success + stats.failure),
+      total: stats.success + stats.failure,
+    })).sort((a, b) => b.successRate - a.successRate);
+
+    // 计算性能趋势
+    let performanceTrend: 'improving' | 'stable' | 'declining' = 'stable';
+    if (this.performanceHistory.length >= 2) {
+      const recent = this.performanceHistory.slice(-2);
+      const improvement = recent[1].metrics.completedGoals - recent[0].metrics.completedGoals;
+      
+      if (improvement > 0) performanceTrend = 'improving';
+      else if (improvement < 0) performanceTrend = 'declining';
+    }
+
+    return { patterns, performanceTrend };
+  }
+
+  /**
+   * 预测潜在问题
+   */
+  predictPotentialIssues(): string[] {
+    const issues: string[] = [];
+
+    // 检查学习模式中的失败
+    for (const [pattern, stats] of this.learningPatterns.entries()) {
+      const failureRate = stats.failure / (stats.success + stats.failure);
+      if (failureRate > 0.5 && stats.total > 3) {
+        issues.push(`任务"${pattern}"失败率较高 (${(failureRate * 100).toFixed(1)}%)`);
+      }
+    }
+
+    // 检查长期未完成的目标
+    const longTermPending = this.awareness.goals.longTerm.filter(g => g.status === 'pending');
+    if (longTermPending.length > 3) {
+      issues.push('长期目标积压过多，需要优先处理');
+    }
+
+    // 检查性能趋势
+    const { performanceTrend } = this.getLearningStats();
+    if (performanceTrend === 'declining') {
+      issues.push('性能呈下降趋势，需要分析原因');
+    }
+
+    return issues;
   }
 }
 
