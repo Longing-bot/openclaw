@@ -541,46 +541,108 @@ export class ContextAssemblerOptimizer {
   }
 
   /**
-   * 估算消息的 token 数
+   * 智能估算消息的 token 数（支持多语言）
    */
   private estimateTokens(messages: AgentMessage[]): number {
-    let totalChars = 0;
+    let totalTokens = 0;
+
     for (const message of messages) {
-      if (typeof message.content === 'string') {
-        totalChars += message.content.length;
-      } else if (Array.isArray(message.content)) {
-        for (const part of message.content) {
-          if (part.type === 'text') {
-            totalChars += (part as { text: string }).text.length;
-          }
-        }
-      }
+      const text = typeof message.content === 'string'
+        ? message.content
+        : Array.isArray(message.content)
+          ? message.content
+            .filter(p => p.type === 'text')
+            .map(p => (p as { text: string }).text)
+            .join('')
+          : '';
+
+      // 分别计算中文和英文的 token
+      const chineseChars = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
+      const englishWords = (text.match(/[a-zA-Z]+/g) || []).length;
+      const numbers = (text.match(/\d+/g) || []).length;
+      const punctuation = (text.match(/[^\w\s\u4e00-\u9fa5]/g) || []).length;
+
+      // 中文：约 1.5 token/字
+      // 英文：约 1.3 token/词
+      // 数字：约 2 token/组
+      // 标点：约 0.5 token/个
+      totalTokens += chineseChars * 1.5 + englishWords * 1.3 + numbers * 2 + punctuation * 0.5;
     }
-    // 粗略估算：1 token ≈ 4 字符
-    return Math.ceil(totalChars / 4);
+
+    return Math.ceil(totalTokens);
   }
 
   /**
-   * 裁剪消息到预算内
+   * 智能裁剪消息到预算内（保留重要消息）
    */
   private trimToBudget(messages: AgentMessage[], tokenBudget: number): AgentMessage[] {
-    const result: AgentMessage[] = [];
-    let currentTokens = 0;
+    // 计算每条消息的 token 和重要性
+    const scored = messages.map((msg, index) => ({
+      message: msg,
+      tokens: this.estimateTokens([msg]),
+      importance: this.calculateMessageImportance(msg, index, messages.length),
+    }));
 
-    // 从最新的消息开始保留
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const message = messages[i];
-      const messageTokens = this.estimateTokens([message]);
+    // 按重要性排序，但最后一条消息（通常是最新用户输入）必须保留
+    const lastMessage = scored.pop();
+    scored.sort((a, b) => b.importance - a.importance);
 
-      if (currentTokens + messageTokens <= tokenBudget) {
-        result.unshift(message);
-        currentTokens += messageTokens;
-      } else {
-        break;
+    // 贪心选择
+    const result: typeof scored = [];
+    let currentTokens = lastMessage ? lastMessage.tokens : 0;
+
+    if (lastMessage && lastMessage.tokens <= tokenBudget) {
+      result.push(lastMessage);
+    }
+
+    for (const item of scored) {
+      if (currentTokens + item.tokens <= tokenBudget) {
+        result.push(item);
+        currentTokens += item.tokens;
       }
     }
 
-    return result;
+    // 按原始顺序排序
+    return result
+      .sort((a, b) => messages.indexOf(a.message) - messages.indexOf(b.message))
+      .map(item => item.message);
+  }
+
+  /**
+   * 计算消息重要性
+   */
+  private calculateMessageImportance(
+    message: AgentMessage,
+    index: number,
+    total: number
+  ): number {
+    let importance = 0;
+
+    // 位置权重：最新的消息更重要
+    importance += (index / total) * 0.3;
+
+    // 系统消息更重要
+    if (message.role === 'system') {
+      importance += 0.5;
+    }
+
+    // 用户输入比助手回复更重要（通常包含关键信息）
+    if (message.role === 'user') {
+      importance += 0.3;
+    }
+
+    // 包含代码的消息更重要
+    const text = typeof message.content === 'string' ? message.content : '';
+    if (text.includes('```') || text.includes('function') || text.includes('class')) {
+      importance += 0.2;
+    }
+
+    // 包含错误信息的消息更重要
+    if (text.includes('error') || text.includes('Error') || text.includes('错误')) {
+      importance += 0.2;
+    }
+
+    return importance;
   }
 
   /**
