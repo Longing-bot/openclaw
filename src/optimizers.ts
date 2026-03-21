@@ -147,3 +147,15 @@ export { AsyncOptimizer, asyncOptimizer } from './utils/async-optimizer.js';
 
 // 并发优化器
 export { ConcurrencyOptimizer, concurrencyOptimizer } from './utils/concurrency-optimizer.js';
+
+// 上下文引擎优化器
+export {
+  ContextCache,
+  MessageCompressor,
+  SmartRetriever,
+  ContextAssemblerOptimizer,
+  CrossSessionContextManager,
+  getGlobalContextOptimizer,
+  getGlobalCrossSessionManager,
+  resetGlobalContextOptimizer,
+} from './context-engine/context-optimizer.js';
