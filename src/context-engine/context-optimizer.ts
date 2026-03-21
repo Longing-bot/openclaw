@@ -41,8 +41,10 @@ export interface SmartRetrievalOptions {
 
 export class ContextCache {
   private cache = new Map<string, ContextCacheEntry>();
+  private accessOrder: string[] = []; // LRU 跟踪
   private maxSize: number;
   private ttlMs: number;
+  private sessionKeyIndex = new Map<string, Set<string>>(); // 会话到键的索引
 
   constructor(maxSize = 100, ttlMs = 5 * 60 * 1000) {
     this.maxSize = maxSize;
@@ -70,7 +72,19 @@ export class ContextCache {
     // 检查 TTL
     if (Date.now() - entry.timestamp > this.ttlMs) {
       this.cache.delete(key);
+      // 从访问顺序中移除
+      const index = this.accessOrder.indexOf(key);
+      if (index > -1) {
+        this.accessOrder.splice(index, 1);
+      }
       return undefined;
+    }
+
+    // 更新访问顺序（移到末尾）
+    const index = this.accessOrder.indexOf(key);
+    if (index > -1) {
+      this.accessOrder.splice(index, 1);
+      this.accessOrder.push(key);
     }
 
     // 更新命中计数
@@ -79,7 +93,7 @@ export class ContextCache {
   }
 
   /**
-   * 设置缓存
+   * 设置缓存 - 使用 LRU 淘汰策略
    */
   set(
     sessionId: string,
@@ -90,30 +104,65 @@ export class ContextCache {
   ): void {
     const key = this.generateKey(sessionId, tokenBudget, model);
 
-    // 如果缓存满了，删除最旧的
-    if (this.cache.size >= this.maxSize) {
-      const oldestKey = this.cache.keys().next().value;
-      if (oldestKey) {
-        this.cache.delete(oldestKey);
+    // 如果已存在，更新访问顺序
+    if (this.cache.has(key)) {
+      const index = this.accessOrder.indexOf(key);
+      if (index > -1) {
+        this.accessOrder.splice(index, 1);
+      }
+    } else if (this.cache.size >= this.maxSize) {
+      // LRU 淘汰：删除最久未访问的
+      const lruKey = this.accessOrder.shift();
+      if (lruKey) {
+        const oldEntry = this.cache.get(lruKey);
+        if (oldEntry) {
+          // 从会话索引中移除
+          const oldSessionId = lruKey.split(':')[0];
+          const sessionKeys = this.sessionKeyIndex.get(oldSessionId);
+          if (sessionKeys) {
+            sessionKeys.delete(lruKey);
+            if (sessionKeys.size === 0) {
+              this.sessionKeyIndex.delete(oldSessionId);
+            }
+          }
+        }
+        this.cache.delete(lruKey);
       }
     }
 
+    // 添加到缓存
     this.cache.set(key, {
       messages,
       estimatedTokens,
       timestamp: Date.now(),
       hitCount: 0,
     });
+
+    // 更新访问顺序
+    this.accessOrder.push(key);
+
+    // 更新会话索引
+    if (!this.sessionKeyIndex.has(sessionId)) {
+      this.sessionKeyIndex.set(sessionId, new Set());
+    }
+    this.sessionKeyIndex.get(sessionId)!.add(key);
   }
 
   /**
-   * 清除会话的缓存
+   * 清除会话的缓存 - 使用索引优化
    */
   invalidateSession(sessionId: string): void {
-    for (const key of this.cache.keys()) {
-      if (key.startsWith(`${sessionId}:`)) {
+    const sessionKeys = this.sessionKeyIndex.get(sessionId);
+    if (sessionKeys) {
+      for (const key of sessionKeys) {
         this.cache.delete(key);
+        // 从访问顺序中移除
+        const index = this.accessOrder.indexOf(key);
+        if (index > -1) {
+          this.accessOrder.splice(index, 1);
+        }
       }
+      this.sessionKeyIndex.delete(sessionId);
     }
   }
 
@@ -146,6 +195,17 @@ export class ContextCache {
 // ==================== 智能消息压缩 ====================
 
 export class MessageCompressor {
+  private static readonly COMPRESSION_PATTERNS = [
+    // 压缩重复字符
+    { pattern: /(.+)\1{2,}/g, replacement: '$1$1' },
+    // 压缩长 URL
+    { pattern: /https?:\/\/[^\s]{50,}/g, replacement: (match: string) => match.slice(0, 30) + '...' },
+    // 压缩 base64
+    { pattern: /data:[^;]+;base64,[A-Za-z0-9+/]{100,}/g, replacement: '[base64-data]' },
+    // 压缩长代码块
+    { pattern: /```[\s\S]{500,}?```/g, replacement: '[code-block]' },
+  ];
+
   /**
    * 压缩消息内容
    */
@@ -162,7 +222,13 @@ export class MessageCompressor {
         ...message,
         content: message.content.map(part => {
           if (part.type === 'text') {
-            return { ...part, text: this.compressText(part.text) };
+            return { ...part, text: this.compressText((part as { text: string }).text) };
+          } else if (part.type === 'image' && 'url' in part) {
+            // 压缩图片 URL
+            const url = (part as { url: string }).url;
+            if (url.length > 100) {
+              return { ...part, url: url.slice(0, 50) + '...' };
+            }
           }
           return part;
         }),
@@ -173,11 +239,22 @@ export class MessageCompressor {
   }
 
   /**
-   * 压缩文本内容
+   * 智能压缩文本内容
    */
   private static compressText(text: string): string {
+    let compressed = text;
+
+    // 应用压缩模式
+    for (const { pattern, replacement } of this.COMPRESSION_PATTERNS) {
+      if (typeof replacement === 'function') {
+        compressed = compressed.replace(pattern, replacement);
+      } else {
+        compressed = compressed.replace(pattern, replacement);
+      }
+    }
+
     // 移除多余的空白
-    let compressed = text.replace(/\s+/g, ' ').trim();
+    compressed = compressed.replace(/\s+/g, ' ').trim();
 
     // 移除重复的标点
     compressed = compressed.replace(/([.!?]){2,}/g, '$1');
@@ -202,6 +279,15 @@ export class MessageCompressor {
     const originalSize = JSON.stringify(original).length;
     const compressedSize = JSON.stringify(compressed).length;
     return originalSize - compressedSize;
+  }
+
+  /**
+   * 压缩率
+   */
+  static getCompressionRatio(original: AgentMessage[], compressed: AgentMessage[]): number {
+    const originalSize = JSON.stringify(original).length;
+    const compressedSize = JSON.stringify(compressed).length;
+    return originalSize > 0 ? (originalSize - compressedSize) / originalSize : 0;
   }
 }
 
