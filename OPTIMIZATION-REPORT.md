@@ -191,6 +191,50 @@ console.log(stats);
 
 ## 🔄 持续优化记录
 
+### 2026-03-21 08:23 更新
+
+#### 新增模块：多智能体协作（ClawTeam 集成）
+
+| 模块 | 功能 | 状态 |
+|------|------|------|
+| ClawTeamIntegrator | ClawTeam 命令集成 | ✅ 完成 |
+| SmartCodeReviewer | 智能代码审查 | ✅ 完成 |
+
+#### 集成功能
+
+- **团队启动**: 自动创建多智能体团队
+- **任务分配**: 智能分配审查/优化任务
+- **消息通信**: 智能体间消息传递
+- **代码审查**: 4维度审查（安全、性能、架构、综合）
+- **代码优化**: 多智能体协同优化
+
+#### 使用示例
+
+```typescript
+// 使用多智能体审查代码
+import { getGlobalCodeReviewer } from './multi-agent/clawteam-integration.js';
+
+const reviewer = getGlobalCodeReviewer();
+
+// 启动代码审查
+const result = await reviewer.reviewCode(
+  'src/context-engine/context-optimizer.ts',
+  'all'  // 审查所有维度
+);
+
+// 启动代码优化
+const optimizationTeam = await reviewer.optimizeCode(
+  'src/context-engine/context-optimizer.ts',
+  ['性能优化', '内存优化', '代码规范']
+);
+```
+
+#### 优化效果
+
+- **代码审查效率**: 4个专业审查员并行工作
+- **问题发现率**: 多维度覆盖，减少遗漏
+- **优化建议质量**: 专业分工，建议更精准
+
 ### 2026-03-21 08:08 更新
 
 #### 新增优化器：上下文引擎优化器

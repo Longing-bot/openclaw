@@ -159,3 +159,12 @@ export {
   getGlobalCrossSessionManager,
   resetGlobalContextOptimizer,
 } from './context-engine/context-optimizer.js';
+
+// 多智能体协作（ClawTeam集成）
+export {
+  ClawTeamIntegrator,
+  SmartCodeReviewer,
+  getGlobalClawTeamIntegrator,
+  getGlobalCodeReviewer,
+  resetGlobalClawTeam,
+} from './multi-agent/clawteam-integration.js';
