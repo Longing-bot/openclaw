@@ -294,7 +294,13 @@ export class MessageCompressor {
 // ==================== 智能上下文检索 ====================
 
 export class SmartRetriever {
-  private messageIndex = new Map<string, Map<string, AgentMessage[]>>(); // sessionId -> keyword -> messages
+  private messageIndex = new Map<string, Map<string, Set<AgentMessage>>>(); // sessionId -> keyword -> messages (Set去重)
+  private messageTimestamps = new Map<AgentMessage, number>(); // 消息时间戳
+  private stopWords = new Set([
+    '的', '了', '在', '是', '我', '有', '和', '就', '不', '人', '都', '一', '一个',
+    'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had',
+    'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might',
+  ]);
 
   /**
    * 索引消息用于快速检索
@@ -307,16 +313,19 @@ export class SmartRetriever {
     const sessionIndex = this.messageIndex.get(sessionId)!;
     const keywords = this.extractKeywords(message);
 
+    // 记录时间戳
+    this.messageTimestamps.set(message, Date.now());
+
     for (const keyword of keywords) {
       if (!sessionIndex.has(keyword)) {
-        sessionIndex.set(keyword, []);
+        sessionIndex.set(keyword, new Set());
       }
-      sessionIndex.get(keyword)!.push(message);
+      sessionIndex.get(keyword)!.add(message);
     }
   }
 
   /**
-   * 从消息中提取关键词
+   * 智能关键词提取（支持中英文）
    */
   private extractKeywords(message: AgentMessage): string[] {
     const text = typeof message.content === 'string'
@@ -328,21 +337,45 @@ export class SmartRetriever {
           .join(' ')
         : '';
 
-    // 简单的关键词提取（实际可以用更复杂的 NLP）
-    const words = text.toLowerCase()
-      .replace(/[^\w\s]/g, '')
-      .split(/\s+/)
-      .filter(word => word.length > 3); // 过滤短词
+    // 提取英文单词
+    const englishWords = text.match(/[a-zA-Z]{3,}/g) || [];
+    
+    // 提取中文词组（简单按2-4字切分）
+    const chineseChars = text.replace(/[^\u4e00-\u9fa5]/g, '');
+    const chinesePhrases: string[] = [];
+    for (let i = 0; i < chineseChars.length - 1; i++) {
+      chinesePhrases.push(chineseChars.slice(i, i + 2));
+      if (i < chineseChars.length - 2) {
+        chinesePhrases.push(chineseChars.slice(i, i + 3));
+      }
+    }
 
-    // 去重并返回前 10 个
-    return [...new Set(words)].slice(0, 10);
+    // 提取代码标识符
+    const codeIdentifiers = text.match(/[a-zA-Z_][a-zA-Z0-9_]{2,}/g) || [];
+
+    // 合并并过滤停用词
+    const allKeywords = [...englishWords, ...chinesePhrases, ...codeIdentifiers]
+      .map(w => w.toLowerCase())
+      .filter(w => !this.stopWords.has(w) && w.length > 1);
+
+    // 统计词频，取高频词
+    const freq = new Map<string, number>();
+    for (const word of allKeywords) {
+      freq.set(word, (freq.get(word) || 0) + 1);
+    }
+
+    // 按频率排序，取前15个
+    return [...freq.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 15)
+      .map(([word]) => word);
   }
 
   /**
-   * 检索相关消息
+   * 检索相关消息（带时间衰减和相关性评分）
    */
   retrieve(options: SmartRetrievalOptions): AgentMessage[] {
-    const { sessionId, query, maxResults = 5 } = options;
+    const { sessionId, query, maxResults = 5, timeWeight = 0.3, relevanceWeight = 0.7 } = options;
     const sessionIndex = this.messageIndex.get(sessionId);
 
     if (!sessionIndex) {
@@ -352,30 +385,80 @@ export class SmartRetriever {
     const queryKeywords = query.toLowerCase()
       .replace(/[^\w\s]/g, '')
       .split(/\s+/)
-      .filter(word => word.length > 3);
+      .filter(word => word.length > 1 && !this.stopWords.has(word));
 
-    const scoredMessages = new Map<AgentMessage, number>();
+    const now = Date.now();
+    const scoredMessages = new Map<AgentMessage, { relevance: number; recency: number }>();
 
     for (const keyword of queryKeywords) {
       const messages = sessionIndex.get(keyword) || [];
       for (const message of messages) {
-        const currentScore = scoredMessages.get(message) || 0;
-        scoredMessages.set(message, currentScore + 1);
+        const current = scoredMessages.get(message) || { relevance: 0, recency: 0 };
+        
+        // 相关性评分：关键词匹配数量
+        current.relevance += 1;
+        
+        // 时间衰减评分：越新越高
+        const timestamp = this.messageTimestamps.get(message) || 0;
+        const ageMinutes = (now - timestamp) / (1000 * 60);
+        current.recency = Math.max(current.recency, Math.exp(-ageMinutes / 60)); // 1小时衰减
+        
+        scoredMessages.set(message, current);
       }
     }
 
-    // 按分数排序并返回 top N
+    // 综合评分排序
     return [...scoredMessages.entries()]
-      .sort((a, b) => b[1] - a[1])
+      .map(([message, scores]) => ({
+        message,
+        score: scores.relevance * relevanceWeight + scores.recency * timeWeight,
+      }))
+      .sort((a, b) => b.score - a.score)
       .slice(0, maxResults)
-      .map(([message]) => message);
+      .map(item => item.message);
   }
 
   /**
    * 清除会话索引
    */
   clearSession(sessionId: string): void {
+    const sessionIndex = this.messageIndex.get(sessionId);
+    if (sessionIndex) {
+      // 清理时间戳
+      for (const messages of sessionIndex.values()) {
+        for (const message of messages) {
+          this.messageTimestamps.delete(message);
+        }
+      }
+    }
     this.messageIndex.delete(sessionId);
+  }
+
+  /**
+   * 获取索引统计
+   */
+  getStats(sessionId?: string): { keywords: number; messages: number } {
+    if (sessionId) {
+      const sessionIndex = this.messageIndex.get(sessionId);
+      if (!sessionIndex) return { keywords: 0, messages: 0 };
+      
+      let messageCount = 0;
+      for (const messages of sessionIndex.values()) {
+        messageCount += messages.size;
+      }
+      return { keywords: sessionIndex.size, messages: messageCount };
+    }
+
+    // 全局统计
+    let totalKeywords = 0;
+    let totalMessages = 0;
+    for (const sessionIndex of this.messageIndex.values()) {
+      totalKeywords += sessionIndex.size;
+      for (const messages of sessionIndex.values()) {
+        totalMessages += messages.size;
+      }
+    }
+    return { keywords: totalKeywords, messages: totalMessages };
   }
 }
 
