@@ -34,6 +34,18 @@ export {
   type SwarmResult,
 } from './multi-agent/swarm.js';
 
+export {
+  NovaSystem,
+  createNovaSystem,
+  NovaRouter,
+  NovaCompiler,
+  EXECUTORS,
+  type Executor,
+  type NovaAgent,
+  type Task,
+  type RouterConfig,
+} from './multi-agent/nova.js';
+
 // ==================== 自我驱动系统 ====================
 export {
   SelfDrivenEngine,
