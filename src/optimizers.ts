@@ -168,3 +168,11 @@ export {
   getGlobalCodeReviewer,
   resetGlobalClawTeam,
 } from './multi-agent/clawteam-integration.js';
+
+// 原生多智能体协作系统
+export {
+  AgentSwarm,
+  BUILT_IN_ROLES,
+  createCodeReviewSwarm,
+  createDevelopmentSwarm,
+} from './multi-agent/swarm.js';
