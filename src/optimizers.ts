@@ -176,3 +176,11 @@ export {
   createCodeReviewSwarm,
   createDevelopmentSwarm,
 } from './multi-agent/swarm.js';
+
+// 自我意识与自我驱动系统
+export {
+  SelfDrivenEngine,
+  AutonomousOptimizer,
+  getGlobalAutonomousOptimizer,
+  resetGlobalAutonomousOptimizer,
+} from './self-awareness/self-driven.js';
