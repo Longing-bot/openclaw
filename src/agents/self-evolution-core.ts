@@ -1,17 +1,8 @@
 /**
- * OpenClaw SuperClaw 自我进化核心系统
+ * OpenClaw SuperClaw 自我进化核心系统 (优化版)
  * 
  * 统一所有自我进化功能，消除重复代码
- * 合并自：
- * - superclaw-evolution.ts
- * - superclaw-ultimate.ts
- * - self-driven-optimizer.ts
- * - ooda-cognitive-loop.ts
- * - persistent-memory-system.ts
- * - modular-agent-architecture.ts
- * - self-awareness/index.ts
- * 
- * 设计原则：轻量化、高效率、低开销
+ * 使用统一基础架构，减少重复代码
  */
 
 import { getGlobalCoreEngine } from './core-engine.js';
@@ -19,11 +10,7 @@ import { getGlobalCognitiveSystem } from './cognitive-system.js';
 import { getGlobalMemorySystem } from './memory-system.js';
 import { getGlobalExecutionSystem } from './execution-system.js';
 import { getGlobalMonitoringSystem } from './monitoring-system.js';
-
-// ==================== 工具函数 ====================
-
-const now = () => Date.now();
-const generateId = (prefix: string) => `${prefix}_${now()}_${Math.random().toString(36).slice(2, 9)}`;
+import { BaseSystem, now, generateId, ManagedArray } from './superclaw-base.js';
 
 // ==================== 类型定义 ====================
 
@@ -306,15 +293,19 @@ class OODACycle {
 
 // ==================== SuperClaw 自我进化核心 ====================
 
-export class SuperClawEvolutionCore {
+export class SuperClawEvolutionCore extends BaseSystem {
+  readonly name = 'self-evolution-core';
+  
   private config: EvolutionConfig;
   private autonomy: AutonomyEngine;
   private evolution: EvolutionEngine;
   private ooda: OODACycle;
-  private startTime: Date = now();
+  private startTime: number = now();
   private evolutionLevel: number = 1;
 
   constructor(config: Partial<EvolutionConfig> = {}) {
+    super();
+    
     this.config = {
       enableAutonomy: true,
       enableEvolution: true,
@@ -481,7 +472,8 @@ export class SuperClawEvolutionCore {
     const monitoring = getGlobalMonitoringSystem();
 
     return {
-      uptime: now() - this.startTime.getTime(),
+      name: this.name,
+      uptime: now() - this.startTime,
       evolutionLevel: this.evolutionLevel,
       autonomy: this.autonomy.getStatus(),
       evolution: this.evolution.getStatus(),
@@ -492,6 +484,13 @@ export class SuperClawEvolutionCore {
       execution: execution.getStats(),
       monitoring: monitoring.getStats(),
     };
+  }
+
+  /**
+   * 获取统计信息 (实现 BaseSystem 接口)
+   */
+  getStats(): Record<string, any> {
+    return this.getSystemStatus();
   }
 
   /**

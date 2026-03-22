@@ -1,13 +1,10 @@
 /**
  * OpenClaw SuperClaw 认知系统 (优化版)
  * 
- * 设计原则：轻量化、高效率、低开销
+ * 使用统一基础架构，减少重复代码
  */
 
-// ==================== 工具函数 ====================
-
-const now = () => Date.now();
-const generateId = (prefix: string) => `${prefix}_${now()}_${Math.random().toString(36).slice(2, 9)}`;
+import { BaseSystem, ManagedArray, now, generateId } from './superclaw-base.js';
 
 // ==================== 推理引擎 ====================
 
@@ -17,7 +14,7 @@ interface ReasoningContext {
   confidence: number;
 }
 
-export class CognitiveReasoningEngine {
+export class ReasoningEngine {
   private context: ReasoningContext = {
     facts: new Set(),
     rules: [],
@@ -71,7 +68,7 @@ interface DecisionOption {
   factors: Record<string, number>;
 }
 
-export class CognitiveDecisionSystem {
+export class DecisionSystem {
   private options: DecisionOption[] = [];
   private weights: Record<string, number> = {};
 
@@ -132,7 +129,7 @@ interface Plan {
   totalCost: number;
 }
 
-export class CognitivePlanningSystem {
+export class PlanningSystem {
   private steps: PlanStep[] = [];
 
   addStep(step: PlanStep): void {
@@ -192,9 +189,12 @@ interface Reflection {
   insights: string[];
 }
 
-export class CognitiveReflectionSystem {
-  private reflections: Reflection[] = [];
-  private maxReflections = 100;
+export class ReflectionSystem {
+  private reflections: ManagedArray<Reflection>;
+
+  constructor(maxSize = 100) {
+    this.reflections = new ManagedArray(maxSize);
+  }
 
   reflect(content: string, category: string): Reflection {
     const reflection: Reflection = {
@@ -206,11 +206,6 @@ export class CognitiveReflectionSystem {
     };
 
     this.reflections.push(reflection);
-    
-    if (this.reflections.length > this.maxReflections) {
-      this.reflections.shift();
-    }
-
     return reflection;
   }
 
@@ -236,7 +231,7 @@ export class CognitiveReflectionSystem {
   }
 
   clear(): void {
-    this.reflections = [];
+    this.reflections.length = 0;
   }
 }
 
@@ -250,7 +245,7 @@ interface AttentionItem {
   focusScore: number;
 }
 
-export class CognitiveAttentionSystem {
+export class AttentionSystem {
   private items = new Map<string, AttentionItem>();
   private maxItems = 10;
 
@@ -315,8 +310,8 @@ interface Emotion {
   trigger: string;
 }
 
-export class CognitiveEmotionalSystem {
-  private emotions: Emotion[] = [];
+export class EmotionalSystem {
+  private emotions: ManagedArray<Emotion>;
   private baselines: Record<string, number> = {
     joy: 0.5,
     trust: 0.5,
@@ -327,6 +322,10 @@ export class CognitiveEmotionalSystem {
     anger: 0.1,
     anticipation: 0.5,
   };
+
+  constructor(maxSize = 100) {
+    this.emotions = new ManagedArray(maxSize);
+  }
 
   recordEmotion(type: string, intensity: number, trigger: string): void {
     const emotion: Emotion = {
@@ -340,10 +339,6 @@ export class CognitiveEmotionalSystem {
     
     if (this.baselines[type] !== undefined) {
       this.baselines[type] = this.baselines[type] * 0.9 + intensity * 0.1;
-    }
-
-    if (this.emotions.length > 100) {
-      this.emotions.shift();
     }
   }
 
@@ -370,27 +365,30 @@ export class CognitiveEmotionalSystem {
   }
 
   clear(): void {
-    this.emotions = [];
+    this.emotions.length = 0;
   }
 }
 
 // ==================== 统一认知系统 ====================
 
-export class SuperClawCognitiveSystem {
-  public reasoning: CognitiveReasoningEngine;
-  public decision: CognitiveDecisionSystem;
-  public planning: CognitivePlanningSystem;
-  public reflection: CognitiveReflectionSystem;
-  public attention: CognitiveAttentionSystem;
-  public emotion: CognitiveEmotionalSystem;
+export class SuperClawCognitiveSystem extends BaseSystem {
+  readonly name = 'cognitive-system';
+  
+  public reasoning: ReasoningEngine;
+  public decision: DecisionSystem;
+  public planning: PlanningSystem;
+  public reflection: ReflectionSystem;
+  public attention: AttentionSystem;
+  public emotion: EmotionalSystem;
 
   constructor() {
-    this.reasoning = new CognitiveReasoningEngine();
-    this.decision = new CognitiveDecisionSystem();
-    this.planning = new CognitivePlanningSystem();
-    this.reflection = new CognitiveReflectionSystem();
-    this.attention = new CognitiveAttentionSystem();
-    this.emotion = new CognitiveEmotionalSystem();
+    super();
+    this.reasoning = new ReasoningEngine();
+    this.decision = new DecisionSystem();
+    this.planning = new PlanningSystem();
+    this.reflection = new ReflectionSystem();
+    this.attention = new AttentionSystem();
+    this.emotion = new EmotionalSystem();
   }
 
   think(context: string): {
@@ -417,6 +415,7 @@ export class SuperClawCognitiveSystem {
 
   getStats(): Record<string, any> {
     return {
+      name: this.name,
       facts: this.reasoning.getFacts().length,
       confidence: this.reasoning.getConfidence(),
       recentReflections: this.reflection.getRecentReflections(5).length,
