@@ -20,6 +20,11 @@ import { getGlobalMemorySystem } from './memory-system.js';
 import { getGlobalExecutionSystem } from './execution-system.js';
 import { getGlobalMonitoringSystem } from './monitoring-system.js';
 
+// ==================== 工具函数 ====================
+
+const now = () => now();
+const generateId = (prefix: string) => `${prefix}_${now()}_${Math.random().toString(36).slice(2, 9)}`;
+
 // ==================== 类型定义 ====================
 
 export interface EvolutionConfig {
@@ -38,7 +43,7 @@ export interface Experience {
   action: string;
   result: string;
   success: boolean;
-  timestamp: Date;
+  timestamp: number;
   tags: string[];
 }
 
@@ -48,8 +53,8 @@ export interface Goal {
   description: string;
   priority: 'low' | 'medium' | 'high' | 'critical';
   status: 'pending' | 'in_progress' | 'completed' | 'failed';
-  createdAt: Date;
-  completedAt?: Date;
+  createdAt: number;
+  completedAt?: number;
 }
 
 export interface Task {
@@ -59,15 +64,15 @@ export interface Task {
   priority: 'low' | 'medium' | 'high' | 'critical';
   status: 'pending' | 'in_progress' | 'completed' | 'failed';
   goalId?: string;
-  createdAt: Date;
-  completedAt?: Date;
+  createdAt: number;
+  completedAt?: number;
 }
 
 export interface Reflection {
   id: string;
   content: string;
   insights: string[];
-  timestamp: Date;
+  timestamp: number;
   category: string;
 }
 
@@ -76,7 +81,7 @@ export interface BehaviorPattern {
   pattern: string;
   frequency: number;
   successRate: number;
-  lastSeen: Date;
+  lastSeen: number;
 }
 
 export interface Knowledge {
@@ -85,7 +90,7 @@ export interface Knowledge {
   content: string;
   confidence: number;
   source: string;
-  timestamp: Date;
+  timestamp: number;
 }
 
 // ==================== 自主性引擎 ====================
@@ -95,23 +100,23 @@ class AutonomyEngine {
   private tasks: Map<string, Task> = new Map();
 
   addGoal(goal: Omit<Goal, 'id' | 'status' | 'createdAt'>): string {
-    const id = `goal_${Date.now()}`;
+    const id = generateId("goal");
     this.goals.set(id, {
       ...goal,
       id,
       status: 'pending',
-      createdAt: new Date(),
+      createdAt: now(),
     });
     return id;
   }
 
   addTask(task: Omit<Task, 'id' | 'status' | 'createdAt'>): string {
-    const id = `task_${Date.now()}`;
+    const id = generateId("task");
     this.tasks.set(id, {
       ...task,
       id,
       status: 'pending',
-      createdAt: new Date(),
+      createdAt: now(),
     });
     return id;
   }
@@ -120,7 +125,7 @@ class AutonomyEngine {
     const task = this.tasks.get(taskId);
     if (task) {
       task.status = 'completed';
-      task.completedAt = new Date();
+      task.completedAt = now();
     }
   }
 
@@ -128,7 +133,7 @@ class AutonomyEngine {
     const goal = this.goals.get(goalId);
     if (goal) {
       goal.status = 'completed';
-      goal.completedAt = new Date();
+      goal.completedAt = now();
     }
   }
 
@@ -168,11 +173,11 @@ class EvolutionEngine {
   private knowledgeBase: Knowledge[] = [];
 
   recordExperience(experience: Omit<Experience, 'id' | 'timestamp'>): string {
-    const id = `exp_${Date.now()}`;
+    const id = generateId("exp");
     this.experiences.push({
       ...experience,
       id,
-      timestamp: new Date(),
+      timestamp: now(),
     });
 
     // 更新行为模式
@@ -192,27 +197,27 @@ class EvolutionEngine {
     if (existing) {
       existing.frequency++;
       existing.successRate = (existing.successRate * (existing.frequency - 1) + (success ? 1 : 0)) / existing.frequency;
-      existing.lastSeen = new Date();
+      existing.lastSeen = now();
     } else {
       this.patterns.push({
-        id: `pattern_${Date.now()}`,
+        id: generateId("pattern"),
         pattern: context,
         frequency: 1,
         successRate: success ? 1 : 0,
-        lastSeen: new Date(),
+        lastSeen: now(),
       });
     }
   }
 
   addKnowledge(domain: string, content: string, confidence: number, source: string): string {
-    const id = `knowledge_${Date.now()}`;
+    const id = generateId("knowledge");
     this.knowledgeBase.push({
       id,
       domain,
       content,
       confidence,
       source,
-      timestamp: new Date(),
+      timestamp: now(),
     });
     return id;
   }
@@ -306,7 +311,7 @@ export class SuperClawEvolutionCore {
   private autonomy: AutonomyEngine;
   private evolution: EvolutionEngine;
   private ooda: OODACycle;
-  private startTime: Date = new Date();
+  private startTime: Date = now();
   private evolutionLevel: number = 1;
 
   constructor(config: Partial<EvolutionConfig> = {}) {
@@ -476,7 +481,7 @@ export class SuperClawEvolutionCore {
     const monitoring = getGlobalMonitoringSystem();
 
     return {
-      uptime: Date.now() - this.startTime.getTime(),
+      uptime: now() - this.startTime.getTime(),
       evolutionLevel: this.evolutionLevel,
       autonomy: this.autonomy.getStatus(),
       evolution: this.evolution.getStatus(),

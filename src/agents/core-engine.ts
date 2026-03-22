@@ -1,16 +1,14 @@
 /**
- * OpenClaw SuperClaw 核心引擎
- * 
- * 合并自：
- * - lightweight-cache.ts
- * - lightweight-queue.ts
- * - lightweight-lock-manager.ts
- * - lightweight-state-machine.ts
- * - lightweight-event-system.ts
- * - lightweight-middleware-system.ts
+ * OpenClaw SuperClaw 核心引擎 (优化版)
  * 
  * 设计原则：轻量化、高效率、低开销
+ * 优化：减少重复代码，统一时间戳，简化类型
  */
+
+// ==================== 工具函数 ====================
+
+const now = () => Date.now();
+const generateId = (prefix: string) => `${prefix}_${now()}_${Math.random().toString(36).slice(2, 9)}`;
 
 // ==================== 缓存系统 ====================
 
@@ -23,16 +21,18 @@ interface CacheEntry<T> {
 export class LightweightCache<T = any> {
   private cache = new Map<string, CacheEntry<T>>();
   private defaultTTL: number;
+  private maxSize: number;
 
-  constructor(defaultTTL = 300000) { // 5分钟
+  constructor(defaultTTL = 300000, maxSize = 1000) {
     this.defaultTTL = defaultTTL;
+    this.maxSize = maxSize;
   }
 
   get(key: string): T | undefined {
     const entry = this.cache.get(key);
     if (!entry) return undefined;
     
-    if (Date.now() > entry.expiresAt) {
+    if (now() > entry.expiresAt) {
       this.cache.delete(key);
       return undefined;
     }
@@ -42,9 +42,15 @@ export class LightweightCache<T = any> {
   }
 
   set(key: string, value: T, ttl?: number): void {
+    // LRU 淘汰
+    if (this.cache.size >= this.maxSize) {
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey) this.cache.delete(oldestKey);
+    }
+    
     this.cache.set(key, {
       value,
-      expiresAt: Date.now() + (ttl ?? this.defaultTTL),
+      expiresAt: now() + (ttl ?? this.defaultTTL),
       hits: 0,
     });
   }
@@ -62,10 +68,10 @@ export class LightweightCache<T = any> {
   }
 
   cleanup(): number {
-    const now = Date.now();
+    const time = now();
     let cleaned = 0;
     for (const [key, entry] of this.cache) {
-      if (now > entry.expiresAt) {
+      if (time > entry.expiresAt) {
         this.cache.delete(key);
         cleaned++;
       }
@@ -90,7 +96,7 @@ export class LightweightQueue<T = any> {
   private items: QueueItem<T>[] = [];
 
   enqueue(data: T, priority = 0): void {
-    const item = { data, priority, addedAt: Date.now() };
+    const item = { data, priority, addedAt: now() };
     const index = this.items.findIndex(i => i.priority < priority);
     if (index === -1) {
       this.items.push(item);
@@ -127,22 +133,17 @@ export class LightweightLockManager {
 
   acquire(key: string, owner: string, ttl = 30000): boolean {
     const existing = this.locks.get(key);
-    if (existing && Date.now() < existing.expiresAt) {
+    if (existing && now() < existing.expiresAt) {
       return false;
     }
     
-    this.locks.set(key, {
-      owner,
-      expiresAt: Date.now() + ttl,
-    });
+    this.locks.set(key, { owner, expiresAt: now() + ttl });
     return true;
   }
 
   release(key: string, owner: string): boolean {
     const lock = this.locks.get(key);
-    if (!lock || lock.owner !== owner) {
-      return false;
-    }
+    if (!lock || lock.owner !== owner) return false;
     this.locks.delete(key);
     return true;
   }
@@ -150,7 +151,7 @@ export class LightweightLockManager {
   isLocked(key: string): boolean {
     const lock = this.locks.get(key);
     if (!lock) return false;
-    if (Date.now() > lock.expiresAt) {
+    if (now() > lock.expiresAt) {
       this.locks.delete(key);
       return false;
     }
@@ -158,10 +159,10 @@ export class LightweightLockManager {
   }
 
   cleanup(): number {
-    const now = Date.now();
+    const time = now();
     let cleaned = 0;
     for (const [key, lock] of this.locks) {
-      if (now > lock.expiresAt) {
+      if (time > lock.expiresAt) {
         this.locks.delete(key);
         cleaned++;
       }
@@ -196,17 +197,12 @@ export class LightweightStateMachine {
   async transition(event: string): Promise<boolean> {
     if (!this.currentState) return false;
     
-    const stateTransitions = this.transitions.get(this.currentState);
-    if (!stateTransitions) return false;
-    
-    const nextState = stateTransitions.get(event);
+    const nextState = this.transitions.get(this.currentState)?.get(event);
     if (!nextState) return false;
     
     this.currentState = nextState;
     const handler = this.states.get(nextState);
-    if (handler) {
-      await handler();
-    }
+    if (handler) await handler();
     
     return true;
   }
@@ -233,7 +229,6 @@ export class LightweightEventSystem {
       this.handlers.set(event, new Set());
     }
     this.handlers.get(event)!.add(handler);
-    
     return () => this.off(event, handler);
   }
 
@@ -242,7 +237,6 @@ export class LightweightEventSystem {
       this.onceHandlers.set(event, new Set());
     }
     this.onceHandlers.get(event)!.add(handler);
-    
     return () => this.onceHandlers.get(event)?.delete(handler);
   }
 
@@ -257,36 +251,20 @@ export class LightweightEventSystem {
     
     const promises: Promise<void>[] = [];
     
-    if (handlers) {
-      for (const handler of handlers) {
-        try {
-          const result = handler(data);
-          if (result instanceof Promise) {
-            promises.push(result);
-          }
-        } catch (error) {
-          console.error(`Event handler error for ${event}:`, error);
-        }
+    const executeHandler = (handler: EventHandler) => {
+      try {
+        const result = handler(data);
+        if (result instanceof Promise) promises.push(result);
+      } catch (error) {
+        console.error(`Event handler error for ${event}:`, error);
       }
-    }
+    };
     
-    if (onceHandlers) {
-      for (const handler of onceHandlers) {
-        try {
-          const result = handler(data);
-          if (result instanceof Promise) {
-            promises.push(result);
-          }
-        } catch (error) {
-          console.error(`Once event handler error for ${event}:`, error);
-        }
-      }
-      onceHandlers.clear();
-    }
+    handlers?.forEach(executeHandler);
+    onceHandlers?.forEach(executeHandler);
+    onceHandlers?.clear();
     
-    if (promises.length > 0) {
-      await Promise.all(promises);
-    }
+    if (promises.length > 0) await Promise.all(promises);
   }
 }
 
@@ -303,14 +281,9 @@ export class LightweightMiddlewareSystem {
 
   async execute(ctx: any): Promise<void> {
     const executeMiddleware = async (index: number): Promise<void> => {
-      if (index >= this.middlewares.length) {
-        return;
-      }
-      
-      const middleware = this.middlewares[index];
-      await middleware(ctx, () => executeMiddleware(index + 1));
+      if (index >= this.middlewares.length) return;
+      await this.middlewares[index](ctx, () => executeMiddleware(index + 1));
     };
-    
     await executeMiddleware(0);
   }
 
@@ -338,7 +311,7 @@ export class SuperClawCoreEngine {
     this.middleware = new LightweightMiddlewareSystem();
     
     // 定期清理
-    setInterval(() => this.cleanup(), 60000); // 每分钟清理一次
+    setInterval(() => this.cleanup(), 60000);
   }
 
   private cleanup(): void {

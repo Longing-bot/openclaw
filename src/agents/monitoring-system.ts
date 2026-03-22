@@ -1,22 +1,20 @@
 /**
- * OpenClaw SuperClaw 监控系统
- * 
- * 合并自：
- * - lightweight-monitor.ts
- * - lightweight-performance-analyzer.ts
- * - lightweight-health-checker.ts
- * - lightweight-logger.ts
- * - lightweight-config-manager.ts
+ * OpenClaw SuperClaw 监控系统 (优化版)
  * 
  * 设计原则：轻量化、高效率、低开销
  */
+
+// ==================== 工具函数 ====================
+
+const now = () => Date.now();
+const generateId = (prefix: string) => `${prefix}_${now()}_${Math.random().toString(36).slice(2, 9)}`;
 
 // ==================== 监控系统 ====================
 
 interface Metric {
   name: string;
   value: number;
-  timestamp: Date;
+  timestamp: number;
   tags: Record<string, string>;
 }
 
@@ -28,7 +26,7 @@ export class MonitoringSystem {
     this.metrics.push({
       name,
       value,
-      timestamp: new Date(),
+      timestamp: now(),
       tags,
     });
 
@@ -37,14 +35,14 @@ export class MonitoringSystem {
     }
   }
 
-  query(name: string, since?: Date): Metric[] {
+  query(name: string, since?: number): Metric[] {
     return this.metrics.filter(m => 
       m.name === name && 
       (!since || m.timestamp >= since)
     );
   }
 
-  getAverage(name: string, since?: Date): number {
+  getAverage(name: string, since?: number): number {
     const metrics = this.query(name, since);
     if (metrics.length === 0) return 0;
     
@@ -62,7 +60,7 @@ export class MonitoringSystem {
 interface PerformanceEntry {
   name: string;
   duration: number;
-  timestamp: Date;
+  timestamp: number;
   success: boolean;
 }
 
@@ -71,10 +69,10 @@ export class PerformanceAnalyzer {
   private maxEntries = 100;
 
   startTimer(name: string): () => void {
-    const start = Date.now();
+    const start = now();
     
     return (success: boolean = true) => {
-      const duration = Date.now() - start;
+      const duration = now() - start;
       this.record(name, duration, success);
     };
   }
@@ -83,7 +81,7 @@ export class PerformanceAnalyzer {
     this.entries.push({
       name,
       duration,
-      timestamp: new Date(),
+      timestamp: now(),
       success,
     });
 
@@ -126,7 +124,7 @@ export class PerformanceAnalyzer {
 interface HealthCheck {
   name: string;
   status: 'healthy' | 'degraded' | 'unhealthy';
-  lastCheck: Date;
+  lastCheck: number;
   message?: string;
 }
 
@@ -144,13 +142,12 @@ export class HealthChecker {
       throw new Error(`Check not found: ${name}`);
     }
 
-    const startTime = Date.now();
     try {
       const healthy = await checkFn();
       const check: HealthCheck = {
         name,
         status: healthy ? 'healthy' : 'unhealthy',
-        lastCheck: new Date(),
+        lastCheck: now(),
         message: healthy ? 'OK' : 'Check failed',
       };
       this.checks.set(name, check);
@@ -159,7 +156,7 @@ export class HealthChecker {
       const check: HealthCheck = {
         name,
         status: 'unhealthy',
-        lastCheck: new Date(),
+        lastCheck: now(),
         message: error instanceof Error ? error.message : String(error),
       };
       this.checks.set(name, check);
@@ -199,7 +196,7 @@ type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 interface LogEntry {
   level: LogLevel;
   message: string;
-  timestamp: Date;
+  timestamp: number;
   data?: any;
 }
 
@@ -243,7 +240,7 @@ export class Logger {
     const entry: LogEntry = {
       level,
       message,
-      timestamp: new Date(),
+      timestamp: now(),
       data,
     };
 
@@ -253,8 +250,7 @@ export class Logger {
       this.entries.shift();
     }
 
-    // 输出到控制台
-    const prefix = `[${level.toUpperCase()}] ${entry.timestamp.toISOString()}`;
+    const prefix = `[${level.toUpperCase()}] ${new Date(entry.timestamp).toISOString()}`;
     if (data) {
       console.log(`${prefix} ${message}`, data);
     } else {
@@ -381,7 +377,6 @@ export class SuperClawMonitoringSystem {
     logs: number;
   }> {
     const healthStatus = this.health.getOverallStatus();
-    const healthChecks = await this.health.runAllChecks();
 
     return {
       health: healthStatus,

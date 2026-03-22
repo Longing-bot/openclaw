@@ -1,16 +1,13 @@
 /**
- * OpenClaw SuperClaw 记忆系统
- * 
- * 合并自：
- * - lightweight-knowledge-graph.ts
- * - lightweight-vector-store.ts
- * - lightweight-learning-system.ts
- * - lightweight-context-manager.ts
- * - lightweight-conversation-manager.ts
- * - lightweight-session-manager.ts
+ * OpenClaw SuperClaw 记忆系统 (优化版)
  * 
  * 设计原则：轻量化、高效率、低开销
  */
+
+// ==================== 工具函数 ====================
+
+const now = () => Date.now();
+const generateId = (prefix: string) => `${prefix}_${now()}_${Math.random().toString(36).slice(2, 9)}`;
 
 // ==================== 知识图谱 ====================
 
@@ -23,6 +20,7 @@ interface KnowledgeNode {
 
 export class MemoryKnowledgeGraph {
   private nodes = new Map<string, KnowledgeNode>();
+  private typeIndex = new Map<string, Set<string>>();
 
   addNode(id: string, type: string, properties: Record<string, any> = {}): void {
     if (!this.nodes.has(id)) {
@@ -32,6 +30,12 @@ export class MemoryKnowledgeGraph {
         properties,
         connections: new Set(),
       });
+      
+      // 更新类型索引
+      if (!this.typeIndex.has(type)) {
+        this.typeIndex.set(type, new Set());
+      }
+      this.typeIndex.get(type)!.add(id);
     }
   }
 
@@ -49,6 +53,30 @@ export class MemoryKnowledgeGraph {
   }
 
   query(type?: string, properties?: Record<string, any>): KnowledgeNode[] {
+    // 使用类型索引优化查询
+    if (type && this.typeIndex.has(type)) {
+      const nodeIds = this.typeIndex.get(type)!;
+      const results: KnowledgeNode[] = [];
+      
+      for (const id of nodeIds) {
+        const node = this.nodes.get(id)!;
+        if (properties) {
+          let matches = true;
+          for (const [key, value] of Object.entries(properties)) {
+            if (node.properties[key] !== value) {
+              matches = false;
+              break;
+            }
+          }
+          if (!matches) continue;
+        }
+        results.push(node);
+      }
+      
+      return results;
+    }
+    
+    // 回退到全表扫描
     const results: KnowledgeNode[] = [];
     
     for (const node of this.nodes.values()) {
@@ -97,6 +125,7 @@ export class MemoryKnowledgeGraph {
 
   clear(): void {
     this.nodes.clear();
+    this.typeIndex.clear();
   }
 
   get size(): number {
@@ -128,28 +157,40 @@ export class MemoryVectorStore {
   }
 
   search(query: number[], limit: number = 10): Array<{ id: string; score: number; metadata: any }> {
+    if (query.length !== this.dimensions) {
+      throw new Error(`Query vector must have ${this.dimensions} dimensions`);
+    }
+    
     const results: Array<{ id: string; score: number; metadata: any }> = [];
     
+    // 预计算查询向量的模长
+    let queryNorm = 0;
+    for (let i = 0; i < query.length; i++) {
+      queryNorm += query[i] * query[i];
+    }
+    queryNorm = Math.sqrt(queryNorm);
+    
     for (const entry of this.entries.values()) {
-      const score = this.cosineSimilarity(query, entry.vector);
+      // 优化的余弦相似度计算
+      let dotProduct = 0;
+      let entryNorm = 0;
+      
+      for (let i = 0; i < query.length; i++) {
+        dotProduct += query[i] * entry.vector[i];
+        entryNorm += entry.vector[i] * entry.vector[i];
+      }
+      
+      const score = dotProduct / (queryNorm * Math.sqrt(entryNorm));
       results.push({ id: entry.id, score, metadata: entry.metadata });
     }
     
-    return results.sort((a, b) => b.score - a.score).slice(0, limit);
-  }
-
-  private cosineSimilarity(a: number[], b: number[]): number {
-    let dotProduct = 0;
-    let normA = 0;
-    let normB = 0;
-    
-    for (let i = 0; i < a.length; i++) {
-      dotProduct += a[i] * b[i];
-      normA += a[i] * a[i];
-      normB += b[i] * b[i];
+    // 使用部分排序优化
+    if (results.length > limit) {
+      results.sort((a, b) => b.score - a.score);
+      return results.slice(0, limit);
     }
     
-    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+    return results.sort((a, b) => b.score - a.score);
   }
 
   remove(id: string): boolean {
@@ -189,7 +230,7 @@ export class MemoryLearningSystem {
       }
     } else {
       this.patterns.push({
-        id: `pattern_${Date.now()}`,
+        id: generateId('pattern'),
         pattern,
         outcome,
         confidence: success ? 0.5 : 0.3,
@@ -222,7 +263,7 @@ export class MemoryLearningSystem {
 interface ContextEntry {
   id: string;
   content: string;
-  timestamp: Date;
+  timestamp: number;
   importance: number;
   tags: string[];
 }
@@ -235,7 +276,7 @@ export class MemoryContextManager {
     this.contexts.set(id, {
       id,
       content,
-      timestamp: new Date(),
+      timestamp: now(),
       importance,
       tags,
     });
@@ -251,10 +292,11 @@ export class MemoryContextManager {
 
   search(query: string, limit: number = 5): ContextEntry[] {
     const results: ContextEntry[] = [];
+    const lowerQuery = query.toLowerCase();
     
     for (const entry of this.contexts.values()) {
-      if (entry.content.toLowerCase().includes(query.toLowerCase()) ||
-          entry.tags.some(tag => tag.toLowerCase().includes(query.toLowerCase()))) {
+      if (entry.content.toLowerCase().includes(lowerQuery) ||
+          entry.tags.some(tag => tag.toLowerCase().includes(lowerQuery))) {
         results.push(entry);
       }
     }
@@ -294,14 +336,14 @@ export class MemoryContextManager {
 interface ConversationTurn {
   role: 'user' | 'assistant';
   content: string;
-  timestamp: Date;
+  timestamp: number;
 }
 
 interface Conversation {
   id: string;
   turns: ConversationTurn[];
-  startedAt: Date;
-  lastActiveAt: Date;
+  startedAt: number;
+  lastActiveAt: number;
 }
 
 export class MemoryConversationManager {
@@ -311,8 +353,8 @@ export class MemoryConversationManager {
     const conversation: Conversation = {
       id,
       turns: [],
-      startedAt: new Date(),
-      lastActiveAt: new Date(),
+      startedAt: now(),
+      lastActiveAt: now(),
     };
     this.conversations.set(id, conversation);
     return conversation;
@@ -327,11 +369,10 @@ export class MemoryConversationManager {
     conversation.turns.push({
       role,
       content,
-      timestamp: new Date(),
+      timestamp: now(),
     });
-    conversation.lastActiveAt = new Date();
+    conversation.lastActiveAt = now();
 
-    // 限制历史记录
     if (conversation.turns.length > 50) {
       conversation.turns.shift();
     }
@@ -362,8 +403,8 @@ export class MemoryConversationManager {
 interface Session {
   id: string;
   data: Map<string, any>;
-  createdAt: Date;
-  expiresAt: Date;
+  createdAt: number;
+  expiresAt: number;
 }
 
 export class MemorySessionManager {
@@ -374,8 +415,8 @@ export class MemorySessionManager {
     const session: Session = {
       id,
       data: new Map(),
-      createdAt: new Date(),
-      expiresAt: new Date(Date.now() + (ttl ?? this.defaultTTL)),
+      createdAt: now(),
+      expiresAt: now() + (ttl ?? this.defaultTTL),
     };
     this.sessions.set(id, session);
     return session;
@@ -385,7 +426,7 @@ export class MemorySessionManager {
     const session = this.sessions.get(id);
     if (!session) return undefined;
     
-    if (Date.now() > session.expiresAt.getTime()) {
+    if (now() > session.expiresAt) {
       this.sessions.delete(id);
       return undefined;
     }
@@ -411,11 +452,11 @@ export class MemorySessionManager {
   }
 
   cleanup(): number {
-    const now = Date.now();
+    const time = now();
     let cleaned = 0;
     
     for (const [id, session] of this.sessions) {
-      if (now > session.expiresAt.getTime()) {
+      if (time > session.expiresAt) {
         this.sessions.delete(id);
         cleaned++;
       }
@@ -448,7 +489,7 @@ export class SuperClawMemorySystem {
     this.session = new MemorySessionManager();
     
     // 定期清理
-    setInterval(() => this.cleanup(), 300000); // 每5分钟
+    setInterval(() => this.cleanup(), 300000);
   }
 
   private cleanup(): void {
@@ -456,7 +497,7 @@ export class SuperClawMemorySystem {
   }
 
   remember(content: string, importance: number = 0.5, tags: string[] = []): string {
-    const id = `memory_${Date.now()}`;
+    const id = generateId('memory');
     this.context.set(id, content, importance, tags);
     return id;
   }

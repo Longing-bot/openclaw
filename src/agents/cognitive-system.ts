@@ -1,36 +1,31 @@
 /**
- * OpenClaw SuperClaw 认知系统
- * 
- * 合并自：
- * - lightweight-reasoning-engine.ts
- * - lightweight-decision-system.ts
- * - lightweight-planning-system.ts
- * - lightweight-reflection-system.ts
- * - lightweight-attention-system.ts
- * - lightweight-emotional-system.ts
+ * OpenClaw SuperClaw 认知系统 (优化版)
  * 
  * 设计原则：轻量化、高效率、低开销
  */
 
+// ==================== 工具函数 ====================
+
+const now = () => Date.now();
+const generateId = (prefix: string) => `${prefix}_${now()}_${Math.random().toString(36).slice(2, 9)}`;
+
 // ==================== 推理引擎 ====================
 
 interface ReasoningContext {
-  facts: string[];
+  facts: Set<string>;
   rules: Array<{ condition: string; conclusion: string }>;
   confidence: number;
 }
 
 export class CognitiveReasoningEngine {
   private context: ReasoningContext = {
-    facts: [],
+    facts: new Set(),
     rules: [],
     confidence: 0.5,
   };
 
   addFact(fact: string): void {
-    if (!this.context.facts.includes(fact)) {
-      this.context.facts.push(fact);
-    }
+    this.context.facts.add(fact);
   }
 
   addRule(condition: string, conclusion: string): void {
@@ -41,7 +36,7 @@ export class CognitiveReasoningEngine {
     const conclusions: string[] = [];
     
     for (const rule of this.context.rules) {
-      if (this.context.facts.includes(rule.condition)) {
+      if (this.context.facts.has(rule.condition)) {
         conclusions.push(rule.conclusion);
         this.addFact(rule.conclusion);
       }
@@ -59,11 +54,11 @@ export class CognitiveReasoningEngine {
   }
 
   getFacts(): string[] {
-    return [...this.context.facts];
+    return Array.from(this.context.facts);
   }
 
   clear(): void {
-    this.context = { facts: [], rules: [], confidence: 0.5 };
+    this.context = { facts: new Set(), rules: [], confidence: 0.5 };
   }
 }
 
@@ -94,7 +89,8 @@ export class CognitiveDecisionSystem {
     let bestOption = this.options[0];
     let bestScore = this.calculateScore(bestOption);
 
-    for (const option of this.options) {
+    for (let i = 1; i < this.options.length; i++) {
+      const option = this.options[i];
       const score = this.calculateScore(option);
       if (score > bestScore) {
         bestScore = score;
@@ -154,12 +150,18 @@ export class CognitivePlanningSystem {
         step.preconditions.every(p => achieved.has(p))
       );
 
-      if (applicable.length === 0) {
-        return null; // 无法达成目标
-      }
+      if (applicable.length === 0) return null;
 
       // 选择成本最低的步骤
-      const best = applicable.reduce((a, b) => a.cost < b.cost ? a : b);
+      let best = applicable[0];
+      let bestCost = best.cost;
+      
+      for (let i = 1; i < applicable.length; i++) {
+        if (applicable[i].cost < bestCost) {
+          best = applicable[i];
+          bestCost = best.cost;
+        }
+      }
       
       plan.push(best);
       totalCost += best.cost;
@@ -184,7 +186,7 @@ export class CognitivePlanningSystem {
 
 interface Reflection {
   id: string;
-  timestamp: Date;
+  timestamp: number;
   content: string;
   category: string;
   insights: string[];
@@ -196,8 +198,8 @@ export class CognitiveReflectionSystem {
 
   reflect(content: string, category: string): Reflection {
     const reflection: Reflection = {
-      id: `reflection_${Date.now()}`,
-      timestamp: new Date(),
+      id: generateId('reflection'),
+      timestamp: now(),
       content,
       category,
       insights: this.extractInsights(content),
@@ -214,9 +216,8 @@ export class CognitiveReflectionSystem {
 
   private extractInsights(content: string): string[] {
     const insights: string[] = [];
-    
-    // 简单的关键词提取
     const keywords = ['问题', '改进', '优化', '学习', '发现', '错误', '成功'];
+    
     for (const keyword of keywords) {
       if (content.includes(keyword)) {
         insights.push(`包含关键词: ${keyword}`);
@@ -245,12 +246,12 @@ interface AttentionItem {
   id: string;
   content: string;
   priority: number;
-  timestamp: Date;
+  timestamp: number;
   focusScore: number;
 }
 
 export class CognitiveAttentionSystem {
-  private items: Map<string, AttentionItem> = new Map();
+  private items = new Map<string, AttentionItem>();
   private maxItems = 10;
 
   focus(id: string, content: string, priority: number = 0.5): void {
@@ -258,7 +259,7 @@ export class CognitiveAttentionSystem {
     if (existing) {
       existing.focusScore = Math.min(1, existing.focusScore + 0.1);
       existing.priority = priority;
-      existing.timestamp = new Date();
+      existing.timestamp = now();
     } else {
       if (this.items.size >= this.maxItems) {
         this.removeLowestPriority();
@@ -268,7 +269,7 @@ export class CognitiveAttentionSystem {
         id,
         content,
         priority,
-        timestamp: new Date(),
+        timestamp: now(),
         focusScore: 0.5,
       });
     }
@@ -309,8 +310,8 @@ export class CognitiveAttentionSystem {
 
 interface Emotion {
   type: string;
-  intensity: number; // 0-1
-  timestamp: Date;
+  intensity: number;
+  timestamp: number;
   trigger: string;
 }
 
@@ -331,18 +332,16 @@ export class CognitiveEmotionalSystem {
     const emotion: Emotion = {
       type,
       intensity: Math.max(0, Math.min(1, intensity)),
-      timestamp: new Date(),
+      timestamp: now(),
       trigger,
     };
 
     this.emotions.push(emotion);
     
-    // 更新基线
     if (this.baselines[type] !== undefined) {
       this.baselines[type] = this.baselines[type] * 0.9 + intensity * 0.1;
     }
 
-    // 限制历史记录
     if (this.emotions.length > 100) {
       this.emotions.shift();
     }
@@ -400,13 +399,8 @@ export class SuperClawCognitiveSystem {
     attention: any[];
     mood: Record<string, number>;
   } {
-    // 添加上下文到推理引擎
     this.reasoning.addFact(context);
-    
-    // 执行推理
     const conclusions = this.reasoning.reason();
-    
-    // 聚焦注意力
     this.attention.focus('current_context', context, 0.8);
     
     return {

@@ -1,16 +1,13 @@
 /**
- * OpenClaw SuperClaw 执行系统
- * 
- * 合并自：
- * - lightweight-tool-system.ts
- * - lightweight-execution-system.ts
- * - lightweight-resource-manager.ts
- * - lightweight-scheduler.ts
- * - lightweight-timeout-system.ts
- * - lightweight-retry-system.ts
+ * OpenClaw SuperClaw 执行系统 (优化版)
  * 
  * 设计原则：轻量化、高效率、低开销
  */
+
+// ==================== 工具函数 ====================
+
+const now = () => Date.now();
+const generateId = (prefix: string) => `${prefix}_${now()}_${Math.random().toString(36).slice(2, 9)}`;
 
 // ==================== 工具系统 ====================
 
@@ -28,13 +25,14 @@ interface ToolExecution {
   status: 'pending' | 'running' | 'completed' | 'failed';
   result?: any;
   error?: string;
-  startTime: Date;
-  endTime?: Date;
+  startTime: number;
+  endTime?: number;
 }
 
 export class ExecutionToolSystem {
   private tools = new Map<string, ToolDefinition>();
   private executions: ToolExecution[] = [];
+  private maxExecutions = 100;
 
   registerTool(tool: ToolDefinition): void {
     this.tools.set(tool.name, tool);
@@ -47,25 +45,28 @@ export class ExecutionToolSystem {
     }
 
     const execution: ToolExecution = {
-      id: `exec_${Date.now()}`,
+      id: generateId('exec'),
       toolName: name,
       params,
       status: 'running',
-      startTime: new Date(),
+      startTime: now(),
     };
 
     this.executions.push(execution);
+    if (this.executions.length > this.maxExecutions) {
+      this.executions.shift();
+    }
 
     try {
       const result = await tool.handler(params);
       execution.status = 'completed';
       execution.result = result;
-      execution.endTime = new Date();
+      execution.endTime = now();
       return result;
     } catch (error) {
       execution.status = 'failed';
       execution.error = error instanceof Error ? error.message : String(error);
-      execution.endTime = new Date();
+      execution.endTime = now();
       throw error;
     }
   }
@@ -106,7 +107,7 @@ export class ExecutionSystem {
   private maxConcurrent = 5;
 
   addTask(name: string, handler: () => Promise<any>, priority: number = 0): string {
-    const id = `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const id = generateId('task');
     this.tasks.set(id, {
       id,
       name,
@@ -175,7 +176,7 @@ interface Resource {
   type: string;
   allocated: boolean;
   allocatedTo?: string;
-  allocatedAt?: Date;
+  allocatedAt?: number;
 }
 
 export class ExecutionResourceManager {
@@ -187,21 +188,17 @@ export class ExecutionResourceManager {
 
   allocate(id: string, allocatedTo: string): boolean {
     const resource = this.resources.get(id);
-    if (!resource || resource.allocated) {
-      return false;
-    }
+    if (!resource || resource.allocated) return false;
 
     resource.allocated = true;
     resource.allocatedTo = allocatedTo;
-    resource.allocatedAt = new Date();
+    resource.allocatedAt = now();
     return true;
   }
 
   release(id: string): boolean {
     const resource = this.resources.get(id);
-    if (!resource || !resource.allocated) {
-      return false;
-    }
+    if (!resource || !resource.allocated) return false;
 
     resource.allocated = false;
     resource.allocatedTo = undefined;
@@ -231,8 +228,8 @@ interface ScheduledTask {
   name: string;
   handler: () => void;
   interval: number;
-  lastRun?: Date;
-  nextRun: Date;
+  lastRun?: number;
+  nextRun: number;
   active: boolean;
 }
 
@@ -245,13 +242,13 @@ export class ExecutionScheduler {
   }
 
   schedule(name: string, handler: () => void, interval: number): string {
-    const id = `scheduled_${Date.now()}`;
+    const id = generateId('scheduled');
     const task: ScheduledTask = {
       id,
       name,
       handler,
       interval,
-      nextRun: new Date(Date.now() + interval),
+      nextRun: now() + interval,
       active: true,
     };
     this.tasks.set(id, task);
@@ -267,14 +264,14 @@ export class ExecutionScheduler {
   }
 
   private tick(): void {
-    const now = new Date();
+    const time = now();
     
     for (const task of this.tasks.values()) {
-      if (task.active && now >= task.nextRun) {
+      if (task.active && time >= task.nextRun) {
         try {
           task.handler();
-          task.lastRun = now;
-          task.nextRun = new Date(now.getTime() + task.interval);
+          task.lastRun = time;
+          task.nextRun = time + task.interval;
         } catch (error) {
           console.error(`Scheduled task error: ${task.name}`, error);
         }
@@ -300,7 +297,7 @@ export class ExecutionScheduler {
 interface TimeoutTask {
   id: string;
   handler: () => void;
-  expiresAt: Date;
+  expiresAt: number;
   timeout: ReturnType<typeof setTimeout>;
 }
 
@@ -308,7 +305,7 @@ export class ExecutionTimeoutSystem {
   private timeouts = new Map<string, TimeoutTask>();
 
   set(handler: () => void, delay: number): string {
-    const id = `timeout_${Date.now()}`;
+    const id = generateId('timeout');
     const timeout = setTimeout(() => {
       handler();
       this.timeouts.delete(id);
@@ -317,7 +314,7 @@ export class ExecutionTimeoutSystem {
     this.timeouts.set(id, {
       id,
       handler,
-      expiresAt: new Date(Date.now() + delay),
+      expiresAt: now() + delay,
       timeout,
     });
 
