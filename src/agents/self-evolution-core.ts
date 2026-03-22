@@ -22,7 +22,7 @@ import { getGlobalMonitoringSystem } from './monitoring-system.js';
 
 // ==================== 工具函数 ====================
 
-const now = () => now();
+const now = () => Date.now();
 const generateId = (prefix: string) => `${prefix}_${now()}_${Math.random().toString(36).slice(2, 9)}`;
 
 // ==================== 类型定义 ====================
