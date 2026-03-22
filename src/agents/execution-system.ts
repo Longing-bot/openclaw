@@ -1,3 +1,4 @@
+import { BaseSystem, now, generateId, ManagedArray } from "./superclaw-base.js";
 /**
  * OpenClaw SuperClaw 执行系统 (优化版)
  * 
@@ -5,10 +6,6 @@
  */
 
 // ==================== 工具函数 ====================
-
-const now = () => Date.now();
-const generateId = (prefix: string) => `${prefix}_${now()}_${Math.random().toString(36).slice(2, 9)}`;
-
 // ==================== 工具系统 ====================
 
 interface ToolDefinition {
