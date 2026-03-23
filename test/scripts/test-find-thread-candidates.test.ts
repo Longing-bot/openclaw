@@ -44,14 +44,29 @@ describe("scripts/test-find-thread-candidates exclusions", () => {
   it("collects already-pinned files across behavior buckets", () => {
     expect(
       getExistingThreadCandidateExclusions({
+        base: {
+          threadPinned: [{ file: "src/base-a.test.ts" }],
+        },
         unit: {
           isolated: [{ file: "src/a.test.ts" }],
-          singletonIsolated: [{ file: "src/b.test.ts" }],
-          threadSingleton: [{ file: "src/c.test.ts" }],
-          vmForkSingleton: [{ file: "src/d.test.ts" }],
+          threadPinned: [{ file: "src/c.test.ts" }],
         },
       }),
-    ).toEqual(new Set(["src/a.test.ts", "src/b.test.ts", "src/c.test.ts", "src/d.test.ts"]));
+    ).toEqual(new Set(["src/base-a.test.ts", "src/a.test.ts", "src/c.test.ts"]));
+  });
+
+  it("keeps backward-compatible aliases readable", () => {
+    expect(
+      getExistingThreadCandidateExclusions({
+        base: {
+          threadSingleton: [{ file: "src/base-a.test.ts" }],
+        },
+        unit: {
+          isolated: [{ file: "src/a.test.ts" }],
+          threadSingleton: [{ file: "src/c.test.ts" }],
+        },
+      }),
+    ).toEqual(new Set(["src/base-a.test.ts", "src/a.test.ts", "src/c.test.ts"]));
   });
 });
 

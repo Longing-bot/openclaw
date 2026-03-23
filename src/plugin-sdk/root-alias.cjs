@@ -7,6 +7,7 @@ let monolithicSdk = null;
 let diagnosticEventsModule = null;
 const jitiLoaders = new Map();
 const pluginSdkSubpathsCache = new Map();
+const shouldPreferSourceInTests = Boolean(process.env.VITEST) || process.env.NODE_ENV === "test";
 
 function emptyPluginConfigSchema() {
   function error(message) {
@@ -64,10 +65,6 @@ function resolveControlCommandGate(params) {
 }
 
 function onDiagnosticEvent(listener) {
-  const monolithic = loadMonolithicSdk();
-  if (monolithic && typeof monolithic.onDiagnosticEvent === "function") {
-    return monolithic.onDiagnosticEvent(listener);
-  }
   const diagnosticEvents = loadDiagnosticEventsModule();
   if (!diagnosticEvents || typeof diagnosticEvents.onDiagnosticEvent !== "function") {
     throw new Error("openclaw/plugin-sdk root alias could not resolve onDiagnosticEvent");
@@ -142,7 +139,7 @@ function loadMonolithicSdk() {
   }
 
   const distCandidate = path.resolve(__dirname, "..", "..", "dist", "plugin-sdk", "compat.js");
-  if (fs.existsSync(distCandidate)) {
+  if (!shouldPreferSourceInTests && fs.existsSync(distCandidate)) {
     try {
       monolithicSdk = getJiti(true)(distCandidate);
       return monolithicSdk;
@@ -168,7 +165,7 @@ function loadDiagnosticEventsModule() {
     "infra",
     "diagnostic-events.js",
   );
-  if (fs.existsSync(distCandidate)) {
+  if (!shouldPreferSourceInTests && fs.existsSync(distCandidate)) {
     try {
       diagnosticEventsModule = getJiti(true)(distCandidate);
       return diagnosticEventsModule;
